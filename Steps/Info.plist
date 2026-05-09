@@ -2,7 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDisplayName</key>
+	<string>Spot Me</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Steps needs access to your step count data to display how many steps you've walked today.</string>
+	<string>Spot Me needs access to your step count data to display how many steps you've walked today.</string>
 </dict>
 </plist>

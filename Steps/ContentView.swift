@@ -19,12 +19,21 @@ final class GoalStore {
     var proteinGoal: Int
     var gymGoal: Int
 
+    var requireSteps: Bool
+    var requireCalories: Bool
+    var requireProtein: Bool
+    var requireGym: Bool
+
     init() {
         let d = UserDefaults.standard
         self.stepGoal = d.object(forKey: "goalSteps") as? Int ?? 7000
         self.calorieGoal = d.object(forKey: "goalCalories") as? Int ?? 2400
         self.proteinGoal = d.object(forKey: "goalProtein") as? Int ?? 120
         self.gymGoal = d.object(forKey: "goalGym") as? Int ?? 3
+        self.requireSteps = d.object(forKey: "requireSteps") as? Bool ?? true
+        self.requireCalories = d.object(forKey: "requireCalories") as? Bool ?? true
+        self.requireProtein = d.object(forKey: "requireProtein") as? Bool ?? true
+        self.requireGym = d.object(forKey: "requireGym") as? Bool ?? false
     }
 
     func save() {
@@ -33,6 +42,10 @@ final class GoalStore {
         d.set(calorieGoal, forKey: "goalCalories")
         d.set(proteinGoal, forKey: "goalProtein")
         d.set(gymGoal, forKey: "goalGym")
+        d.set(requireSteps, forKey: "requireSteps")
+        d.set(requireCalories, forKey: "requireCalories")
+        d.set(requireProtein, forKey: "requireProtein")
+        d.set(requireGym, forKey: "requireGym")
         if let shared = UserDefaults(suiteName: Self.appGroupID) {
             shared.set(stepGoal, forKey: "goalSteps")
             shared.set(calorieGoal, forKey: "goalCalories")
@@ -174,21 +187,44 @@ struct ContentView: View {
     private var currentStreak: Int {
         var streak = 0
         for day in stepCounter.pastWeek.reversed() {
-            if day.steps >= goalStore.stepGoal { streak += 1 } else { break }
+            if daySuccess(for: day) { streak += 1 } else { break }
         }
         return streak
     }
 
     // MARK: - Day success
 
-    private func daySuccess(for day: DaySteps) -> Bool {
+    private func dayProgress(for day: DaySteps) -> Double {
         let calendar = Calendar.current
         let dayEntries = allEntries.filter { calendar.isDate($0.date, inSameDayAs: day.date) }
         let dayCalories = dayEntries.reduce(0) { $0 + $1.calories }
         let dayProtein = dayEntries.reduce(0) { $0 + $1.protein }
-        return day.steps >= goalStore.stepGoal
-            && dayCalories <= goalStore.calorieGoal
-            && dayProtein >= goalStore.proteinGoal
+        let didGym = allGymEntries.contains { calendar.isDate($0.date, inSameDayAs: day.date) }
+
+        var total = 0
+        var met = 0
+        if goalStore.requireSteps {
+            total += 1
+            if day.steps >= goalStore.stepGoal { met += 1 }
+        }
+        if goalStore.requireCalories {
+            total += 1
+            if dayCalories <= goalStore.calorieGoal { met += 1 }
+        }
+        if goalStore.requireProtein {
+            total += 1
+            if dayProtein >= goalStore.proteinGoal { met += 1 }
+        }
+        if goalStore.requireGym {
+            total += 1
+            if didGym { met += 1 }
+        }
+        guard total > 0 else { return 1.0 }
+        return Double(met) / Double(total)
+    }
+
+    private func daySuccess(for day: DaySteps) -> Bool {
+        dayProgress(for: day) >= 1.0
     }
 
     // MARK: - Body
@@ -236,11 +272,13 @@ struct ContentView: View {
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                Button {
-                    showingSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                        .foregroundStyle(Color(.label))
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(Color(.label))
+                    }
                 }
             }
             .sheet(isPresented: $showingAddSheet) {
@@ -288,7 +326,10 @@ struct ContentView: View {
         HStack(spacing: 0) {
             ForEach(stepCounter.pastWeek) { day in
                 let isSelected = Calendar.current.isDate(day.date, inSameDayAs: selectedDate)
-                let success = daySuccess(for: day)
+                let progress = dayProgress(for: day)
+                let success = progress >= 1.0
+                let isPast = !Calendar.current.isDateInToday(day.date) && day.date < Date.now
+                let ringColor = success ? AppColors.success : (isPast ? AppColors.danger : AppColors.success)
                 Button {
                     withAnimation {
                         selectedDate = day.date
@@ -299,9 +340,21 @@ struct ContentView: View {
                             .font(.caption2)
                             .fontWeight(isSelected ? .bold : .regular)
                             .foregroundStyle(isSelected ? .primary : .secondary)
-                        Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle")
-                            .font(.title3)
-                            .foregroundStyle(isSelected ? (success ? AppColors.success : .primary) : (success ? AppColors.success : .secondary))
+                        ZStack {
+                            Circle()
+                                .stroke(Color(.quaternarySystemFill), lineWidth: 3)
+                                .frame(width: 24, height: 24)
+                            Circle()
+                                .trim(from: 0, to: progress)
+                                .stroke(ringColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .frame(width: 24, height: 24)
+                            if success {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(AppColors.success)
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -319,11 +372,8 @@ struct ContentView: View {
     private var activityCard: some View {
         VStack(spacing: 10) {
             HStack {
-                HStack(spacing: 4) {
-                    Image(systemName: "figure.walk")
-                    Text("Activity")
-                }
-                .font(.subheadline.weight(.semibold))
+                Text("Activity")
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
                 if isToday && currentStreak > 0 {
                     Text("\(currentStreak)-day streak!")
@@ -343,18 +393,21 @@ struct ContentView: View {
                 .foregroundStyle(.primary)
             }
 
-            HStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .stroke(.quaternary, lineWidth: 14)
-                    Circle()
-                        .trim(from: 0, to: selectedStepProgress)
-                        .stroke(stepProgressColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeInOut, value: selectedStepProgress)
+            HStack(spacing: 28) {
+                VStack(spacing: 4) {
+                    ZStack {
+                        Circle()
+                            .stroke(.quaternary, lineWidth: 14)
+                        Circle()
+                            .trim(from: 0, to: selectedStepProgress)
+                            .stroke(stepProgressColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeInOut, value: selectedStepProgress)
 
-                    VStack(spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        VStack(spacing: 2) {
+                            Image(systemName: "figure.walk")
+                                .font(.system(size: 18))
+                                .foregroundStyle(stepProgressColor)
                             Text("\(selectedDaySteps)")
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .contentTransition(.numericText())
@@ -362,20 +415,11 @@ struct ContentView: View {
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
-                        if selectedStepProgress >= 1.0 {
-                            Text("goal reached")
-                                .font(.system(size: 12))
-                                .foregroundStyle(AppColors.success)
-                        } else {
-                            Text("\(selectedStepsRemaining.formatted()) left")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
                     }
+                    .frame(width: 148, height: 148)
                 }
-                .frame(width: 162, height: 162)
 
-                VStack(spacing: 4) {
+                VStack(spacing: 8) {
                     ZStack {
                         Circle()
                             .stroke(.quaternary, lineWidth: 6)
@@ -385,20 +429,23 @@ struct ContentView: View {
                             .rotationEffect(.degrees(-90))
                             .animation(.easeInOut, value: gymProgress)
 
-                        Image(systemName: "dumbbell.fill")
-                            .font(.system(size: 17))
-                            .foregroundStyle(gymColor)
+                        VStack(spacing: 2) {
+                            Image(systemName: "dumbbell.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(gymColor)
+                            Text("\(weekGymCount)/\(goalStore.gymGoal)")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                            Text("Gym")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .frame(width: 77, height: 77)
-                    Text("Gym")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Text("\(weekGymCount)/\(goalStore.gymGoal)")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .frame(width: 90, height: 90)
                 }
             }
         }
-        .padding()
+        .padding([.horizontal, .top])
+        .padding(.bottom, 28)
         .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
@@ -408,11 +455,8 @@ struct ContentView: View {
     private var foodCard: some View {
         VStack(spacing: 10) {
             HStack {
-                HStack(spacing: 4) {
-                    Image(systemName: "fork.knife")
-                    Text("Food")
-                }
-                .font(.subheadline.weight(.semibold))
+                Text("Food")
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
                 if !selectedEntries.isEmpty {
                     Button {
@@ -440,18 +484,21 @@ struct ContentView: View {
                 .foregroundStyle(.primary)
             }
 
-            HStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .stroke(.quaternary, lineWidth: 14)
-                    Circle()
-                        .trim(from: 0, to: calorieProgress)
-                        .stroke(calorieColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeInOut, value: calorieProgress)
+            HStack(spacing: 28) {
+                VStack(spacing: 4) {
+                    ZStack {
+                        Circle()
+                            .stroke(.quaternary, lineWidth: 14)
+                        Circle()
+                            .trim(from: 0, to: calorieProgress)
+                            .stroke(calorieColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeInOut, value: calorieProgress)
 
-                    VStack(spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        VStack(spacing: 2) {
+                            Image(systemName: "fork.knife")
+                                .font(.system(size: 18))
+                                .foregroundStyle(calorieColor)
                             Text("\(totalCalories)")
                                 .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .contentTransition(.numericText())
@@ -459,20 +506,11 @@ struct ContentView: View {
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
-                        if totalCalories > goalStore.calorieGoal {
-                            Text("\(totalCalories - goalStore.calorieGoal) over")
-                                .font(.system(size: 12))
-                                .foregroundStyle(AppColors.danger)
-                        } else {
-                            Text("\(remainingCalories.formatted()) left")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
                     }
+                    .frame(width: 148, height: 148)
                 }
-                .frame(width: 162, height: 162)
 
-                VStack(spacing: 4) {
+                VStack(spacing: 8) {
                     ZStack {
                         Circle()
                             .stroke(.quaternary, lineWidth: 6)
@@ -482,20 +520,23 @@ struct ContentView: View {
                             .rotationEffect(.degrees(-90))
                             .animation(.easeInOut, value: proteinProgress)
 
-                        Image(systemName: "fish.fill")
-                            .font(.system(size: 17))
-                            .foregroundStyle(proteinColor)
+                        VStack(spacing: 2) {
+                            Image(systemName: "fish.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(proteinColor)
+                            Text("\(totalProtein)/\(goalStore.proteinGoal)g")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                            Text("Protein")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .frame(width: 77, height: 77)
-                    Text("Protein")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Text("\(totalProtein)/\(goalStore.proteinGoal)g")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .frame(width: 90, height: 90)
                 }
             }
         }
-        .padding()
+        .padding([.horizontal, .top])
+        .padding(.bottom, 28)
         .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
         .sheet(isPresented: $showingMealDetails) {
@@ -509,11 +550,8 @@ struct ContentView: View {
     private var weightCard: some View {
         VStack(spacing: 10) {
             HStack {
-                HStack(spacing: 4) {
-                    Image(systemName: "scalemass.fill")
-                    Text("Weight")
-                }
-                .font(.subheadline.weight(.semibold))
+                Text("Weight")
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
                 Button {
                     showingWeightLog = true
@@ -722,49 +760,51 @@ struct GoalsSettingsSheet: View {
     @State private var caloriesText = ""
     @State private var proteinText = ""
     @State private var gymText = ""
+    @State private var requireSteps = true
+    @State private var requireCalories = true
+    @State private var requireProtein = true
+    @State private var requireGym = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Daily Goals") {
-                    HStack {
-                        Label("Steps", systemImage: "figure.walk")
-                            .foregroundStyle(Color(.label))
-                        Spacer()
-                        TextField("Steps", text: $stepsText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                    }
-                    HStack {
-                        Label("Calories", systemImage: "fork.knife")
-                            .foregroundStyle(Color(.label))
-                        Spacer()
-                        TextField("kcal", text: $caloriesText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                    }
-                    HStack {
-                        Label("Protein", systemImage: "fish.fill")
-                            .foregroundStyle(Color(.label))
-                        Spacer()
-                        TextField("g", text: $proteinText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                    }
-                }
-                Section("Weekly Goals") {
-                    HStack {
-                        Label("Gym sessions", systemImage: "dumbbell.fill")
-                            .foregroundStyle(Color(.label))
-                        Spacer()
-                        TextField("days", text: $gymText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 80)
-                    }
+                Section {
+                    goalRow(
+                        icon: "figure.walk",
+                        title: "Steps",
+                        value: $stepsText,
+                        placeholder: "7000",
+                        unit: "steps",
+                        isRequired: $requireSteps
+                    )
+                    goalRow(
+                        icon: "fork.knife",
+                        title: "Calories",
+                        value: $caloriesText,
+                        placeholder: "2400",
+                        unit: "kcal",
+                        isRequired: $requireCalories
+                    )
+                    goalRow(
+                        icon: "fish.fill",
+                        title: "Protein",
+                        value: $proteinText,
+                        placeholder: "120",
+                        unit: "g",
+                        isRequired: $requireProtein
+                    )
+                    goalRow(
+                        icon: "dumbbell.fill",
+                        title: "Gym / week",
+                        value: $gymText,
+                        placeholder: "3",
+                        unit: "days",
+                        isRequired: $requireGym
+                    )
+                } header: {
+                    Text("Goals & Day Completion")
+                } footer: {
+                    Text("Toggle on to count toward a completed day.")
                 }
             }
             .navigationTitle("Goals")
@@ -779,6 +819,10 @@ struct GoalsSettingsSheet: View {
                         if let c = Int(caloriesText), c > 0 { goalStore.calorieGoal = c }
                         if let p = Int(proteinText), p > 0 { goalStore.proteinGoal = p }
                         if let g = Int(gymText), g > 0 { goalStore.gymGoal = g }
+                        goalStore.requireSteps = requireSteps
+                        goalStore.requireCalories = requireCalories
+                        goalStore.requireProtein = requireProtein
+                        goalStore.requireGym = requireGym
                         goalStore.save()
                         dismiss()
                     }
@@ -789,6 +833,53 @@ struct GoalsSettingsSheet: View {
                 caloriesText = "\(goalStore.calorieGoal)"
                 proteinText = "\(goalStore.proteinGoal)"
                 gymText = "\(goalStore.gymGoal)"
+                requireSteps = goalStore.requireSteps
+                requireCalories = goalStore.requireCalories
+                requireProtein = goalStore.requireProtein
+                requireGym = goalStore.requireGym
+            }
+        }
+    }
+
+    private func goalRow(
+        icon: String,
+        title: String,
+        value: Binding<String>,
+        placeholder: String,
+        unit: String? = nil,
+        isRequired: Binding<Bool>
+    ) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                withAnimation { isRequired.wrappedValue.toggle() }
+            } label: {
+                Image(systemName: isRequired.wrappedValue ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isRequired.wrappedValue ? AppColors.accent : Color(.tertiaryLabel))
+            }
+            .buttonStyle(.plain)
+
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .frame(width: 20)
+
+            Text(title)
+                .font(.body)
+
+            Spacer()
+
+            HStack(spacing: 4) {
+                TextField(placeholder, text: value)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.body.weight(.medium))
+                    .frame(width: 60)
+                if let unit {
+                    Text(unit)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
