@@ -35,6 +35,7 @@ struct WorkoutView: View {
     @State private var editWorkout: EditWorkoutInfo?
     @State private var showingCategoryPicker = false
     @State private var showingSettings = false
+    @State private var showingContact = false
     @AppStorage("restTimerSeconds") private var restDuration: Int = 120
     @AppStorage("customExercisesJSON") private var customExercisesJSON: String = "[]"
     @AppStorage("customWorkoutTypesJSON") private var customWorkoutTypesJSON: String = "[]"
@@ -174,6 +175,26 @@ struct WorkoutView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                Button {
+                    showingCategoryPicker = true
+                } label: {
+                    HStack {
+                        Text("Start Workout")
+                            .font(.headline)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 20)
+                    .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(.white)
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
                 if recentWorkouts.isEmpty {
                     ContentUnavailableView(
                         "No Workouts Yet",
@@ -238,19 +259,6 @@ struct WorkoutView: View {
                     }
                 }
 
-                Button {
-                    showingCategoryPicker = true
-                } label: {
-                    Text("Start Workout")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.bar)
             }
             .navigationTitle("Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -263,6 +271,17 @@ struct WorkoutView: View {
                             .foregroundStyle(Color(.label))
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingContact = true
+                    } label: {
+                        Image(systemName: "envelope")
+                            .foregroundStyle(Color(.label))
+                    }
+                }
+            }
+            .sheet(isPresented: $showingContact) {
+                ContactUsSheet()
             }
             .sheet(isPresented: $showingCategoryPicker) {
                 CategoryPickerSheet(

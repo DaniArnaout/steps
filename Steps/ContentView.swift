@@ -74,6 +74,7 @@ struct ContentView: View {
     @State private var showingMealDetails = false
     @State private var showingSettings = false
     @State private var showingWeightLog = false
+    @State private var showingContact = false
     @State private var selectedDate: Date = Date()
     @State private var lastActiveDate: Date = Date()
 
@@ -280,6 +281,17 @@ struct ContentView: View {
                             .foregroundStyle(Color(.label))
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingContact = true
+                    } label: {
+                        Image(systemName: "envelope")
+                            .foregroundStyle(Color(.label))
+                    }
+                }
+            }
+            .sheet(isPresented: $showingContact) {
+                ContactUsSheet()
             }
             .sheet(isPresented: $showingAddSheet) {
                 AddFoodSheet(initialDate: selectedDate)
@@ -805,6 +817,22 @@ struct GoalsSettingsSheet: View {
                     Text("Goals & Day Completion")
                 } footer: {
                     Text("Toggle on to count toward a completed day.")
+                }
+
+                Section {
+                    Link(destination: URL(string: "mailto:hello@deadsimple.tools")!) {
+                        HStack {
+                            Image(systemName: "envelope")
+                                .foregroundStyle(AppColors.accent)
+                            Text("Contact Us")
+                            Spacer()
+                            Text("hello@deadsimple.tools")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } footer: {
+                    Text("Send us feedback or report issues.")
                 }
             }
             .navigationTitle("Goals")

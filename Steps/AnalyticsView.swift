@@ -41,6 +41,7 @@ struct AnalyticsView: View {
     @State private var selectedProteinDate: Date?
     @State private var selectedWeightDate: Date?
     @State private var selectedBodyFatDate: Date?
+    @State private var showingContact = false
 
     private var dateRange: [Date] {
         let calendar = Calendar.current
@@ -151,6 +152,19 @@ struct AnalyticsView: View {
             }
             .navigationTitle("Analytics")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingContact = true
+                    } label: {
+                        Image(systemName: "envelope")
+                            .foregroundStyle(Color(.label))
+                    }
+                }
+            }
+            .sheet(isPresented: $showingContact) {
+                ContactUsSheet()
+            }
             .task {
                 await fetchSteps()
             }
@@ -463,6 +477,48 @@ struct AnalyticsView: View {
         .padding()
         .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
+    }
+}
+
+struct ContactUsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Please report issues and request new features:")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    UIPasteboard.general.string = "hello@deadsimple.tools"
+                    withAnimation { copied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { copied = false }
+                    }
+                } label: {
+                    Text("hello@deadsimple.tools")
+                        .foregroundStyle(.blue)
+                }
+
+                if copied {
+                    Text("Copied!")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.green)
+                        .transition(.opacity)
+                }
+            }
+            .padding()
+            .navigationTitle("Contact Us")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.height(250)])
     }
 }
 

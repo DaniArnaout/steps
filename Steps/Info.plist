@@ -5,6 +5,10 @@
 	<key>CFBundleDisplayName</key>
 	<string>Spot Me</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Spot Me needs access to your step count data to display how many steps you've walked today.</string>
+	<string>Spot Me needs access to your step count data to display how many steps you&apos;ve walked today.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Spot Me does not write health data, but HealthKit access is required to read your step count.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
