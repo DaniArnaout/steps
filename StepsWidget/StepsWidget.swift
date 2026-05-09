@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 import HealthKit
 
-private let appGroupID = "group.com.daniarnaout.Steps"
+private let appGroupID = "group.com.daniarnaout.SpotMe"
 
 private func loadStepGoal() -> Int {
     UserDefaults(suiteName: appGroupID)?.object(forKey: "goalSteps") as? Int ?? 7000
