@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 import HealthKit
 
-private let appGroupID = "group.com.daniarnaout.Steps"
+private let appGroupID = "group.com.daniarnaout.SpotMe"
 private let accentGreen = Color(red: 0.20, green: 0.68, blue: 0.50)
 private let dangerRed = Color(red: 0.88, green: 0.30, blue: 0.35)
 private let warningOrange = Color(red: 0.95, green: 0.58, blue: 0.30)
@@ -15,7 +15,7 @@ private func loadCalorieGoal() -> Int {
     UserDefaults(suiteName: appGroupID)?.object(forKey: "goalCalories") as? Int ?? 2400
 }
 
-struct StepsEntry: TimelineEntry {
+struct SpotMeEntry: TimelineEntry {
     let date: Date
     let steps: Int
     let calories: Int
@@ -48,31 +48,31 @@ struct StepsEntry: TimelineEntry {
     }
 }
 
-struct StepsTimelineProvider: TimelineProvider {
+struct SpotMeTimelineProvider: TimelineProvider {
     private let healthStore = HKHealthStore()
     private let stepType = HKQuantityType(.stepCount)
 
-    func placeholder(in context: Context) -> StepsEntry {
-        StepsEntry(date: .now, steps: 4832, calories: 1200, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal())
+    func placeholder(in context: Context) -> SpotMeEntry {
+        SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal())
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (StepsEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: @escaping (SpotMeEntry) -> Void) {
         if context.isPreview {
-            completion(StepsEntry(date: .now, steps: 4832, calories: 1200, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal()))
+            completion(SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal()))
             return
         }
         Task {
             let steps = await fetchTodaySteps()
             let calories = caloriesForToday()
-            completion(StepsEntry(date: .now, steps: steps, calories: calories, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal()))
+            completion(SpotMeEntry(date: .now, steps: steps, calories: calories, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal()))
         }
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<StepsEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<SpotMeEntry>) -> Void) {
         Task {
             let steps = await fetchTodaySteps()
             let calories = caloriesForToday()
-            let entry = StepsEntry(date: .now, steps: steps, calories: calories, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal())
+            let entry = SpotMeEntry(date: .now, steps: steps, calories: calories, stepGoal: loadStepGoal(), calorieGoal: loadCalorieGoal())
             let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: .now)!
             completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
         }
@@ -118,8 +118,8 @@ struct StepsTimelineProvider: TimelineProvider {
 
 // MARK: - Widget Views
 
-struct StepsWidgetEntryView: View {
-    var entry: StepsEntry
+struct SpotMeWidgetEntryView: View {
+    var entry: SpotMeEntry
     @Environment(\.widgetFamily) var family
 
     var body: some View {
@@ -255,12 +255,12 @@ struct StepsWidgetEntryView: View {
 
 // MARK: - Widget Configuration
 
-struct StepsWidget: Widget {
-    let kind = "StepsWidget"
+struct SpotMeWidget: Widget {
+    let kind = "SpotMeWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: StepsTimelineProvider()) { entry in
-            StepsWidgetEntryView(entry: entry)
+        StaticConfiguration(kind: kind, provider: SpotMeTimelineProvider()) { entry in
+            SpotMeWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Spot Me")
         .description("Track your steps and calories at a glance.")
@@ -269,13 +269,13 @@ struct StepsWidget: Widget {
 }
 
 #Preview(as: .systemSmall) {
-    StepsWidget()
+    SpotMeWidget()
 } timeline: {
-    StepsEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2400)
+    SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2400)
 }
 
 #Preview(as: .systemMedium) {
-    StepsWidget()
+    SpotMeWidget()
 } timeline: {
-    StepsEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2400)
+    SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2400)
 }

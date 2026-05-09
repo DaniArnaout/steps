@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct StepsApp: App {
+struct SpotMeApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([FoodEntry.self, GymEntry.self, WeightEntry.self, FoodPreset.self, WorkoutSet.self])
         let config = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)

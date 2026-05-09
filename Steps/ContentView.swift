@@ -12,7 +12,7 @@ enum AppColors {
 
 @Observable
 final class GoalStore {
-    private static let appGroupID = "group.com.daniarnaout.Steps"
+    private static let appGroupID = "group.com.daniarnaout.SpotMe"
 
     var stepGoal: Int
     var calorieGoal: Int
@@ -60,7 +60,7 @@ struct LazyView<Content: View>: View {
 }
 
 struct ContentView: View {
-    static let appGroupID = "group.com.daniarnaout.Steps"
+    static let appGroupID = "group.com.daniarnaout.SpotMe"
 
     @State private var goalStore = GoalStore()
     @State private var stepCounter = StepCounter()

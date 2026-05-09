@@ -199,7 +199,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 339EF5302F9C37A2003841BD /* Build configuration list for PBXProject "Steps" */;
+			buildConfigurationList = 339EF5302F9C37A2003841BD /* Build configuration list for PBXProject "SpotMe" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -526,7 +526,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		339EF5302F9C37A2003841BD /* Build configuration list for PBXProject "Steps" */ = {
+		339EF5302F9C37A2003841BD /* Build configuration list for PBXProject "SpotMe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				339EF5462F9C37A3003841BD /* Debug */,

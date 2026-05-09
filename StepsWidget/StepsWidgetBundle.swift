@@ -2,8 +2,8 @@ import WidgetKit
 import SwiftUI
 
 @main
-struct StepsWidgetBundle: WidgetBundle {
+struct SpotMeWidgetBundle: WidgetBundle {
     var body: some Widget {
-        StepsWidget()
+        SpotMeWidget()
     }
 }
