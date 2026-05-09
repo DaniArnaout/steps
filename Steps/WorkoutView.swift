@@ -273,6 +273,9 @@ struct WorkoutView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             activeType = type
                         }
+                    },
+                    onAddCustom: { type in
+                        addCustomWorkoutType(type)
                     }
                 )
                 .presentationDetents([.medium, .large])
@@ -319,8 +322,10 @@ struct CategoryPickerSheet: View {
     let workoutTypes: [WorkoutType]
     let exercisesForType: (WorkoutType) -> [ExerciseInfo]
     let onSelect: (WorkoutType) -> Void
+    var onAddCustom: ((WorkoutType) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @State private var showingAddWorkoutType = false
 
     var body: some View {
         NavigationStack {
@@ -369,6 +374,29 @@ struct CategoryPickerSheet: View {
                         }
                         .buttonStyle(.plain)
                     }
+
+                    if onAddCustom != nil {
+                        Button {
+                            showingAddWorkoutType = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(AppColors.accent)
+                                    .frame(width: 36)
+                                Text("Custom")
+                                    .font(.headline)
+                                Spacer()
+                            }
+                            .padding()
+                            .background {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [8, 6]))
+                                    .foregroundStyle(Color(.quaternaryLabel))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding()
             }
@@ -377,6 +405,11 @@ struct CategoryPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showingAddWorkoutType) {
+                AddWorkoutTypeSheet { type in
+                    onAddCustom?(type)
                 }
             }
         }
@@ -799,38 +832,38 @@ struct ActiveWorkoutView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule()
                                 .fill(Color(.systemGray5))
-                                .frame(height: 4)
+                                .frame(height: 10)
                             Capsule()
                                 .fill(AppColors.accent)
-                                .frame(width: geo.size.width * progressFraction, height: 4)
+                                .frame(width: geo.size.width * progressFraction, height: 6)
                                 .animation(.easeInOut(duration: 0.3), value: progressFraction)
                         }
                     }
-                    .frame(height: 4)
+                    .frame(height: 10)
 
                     HStack {
                         Text("\(completedSets)/\(totalSets) sets")
-                            .font(.caption)
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.secondary)
                         Spacer()
                         if !isEditMode {
                             HStack(spacing: 5) {
                                 Image(systemName: "timer")
-                                    .font(.caption)
+                                    .font(.subheadline)
                                 Text(formatElapsed(elapsedSeconds))
-                                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                                    .font(.body.weight(.semibold).monospacedDigit())
                             }
                             .foregroundStyle(AppColors.accent)
                         }
                     }
                 }
                 .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.bottom, 10)
 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -868,11 +901,13 @@ struct ActiveWorkoutView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     HStack(spacing: 12) {
-                        Button {
-                            withAnimation { isEditing.toggle() }
-                        } label: {
-                            Image(systemName: isEditing ? "checkmark" : "pencil")
-                                .font(.subheadline)
+                        if isEditMode {
+                            Button {
+                                withAnimation { isEditing.toggle() }
+                            } label: {
+                                Image(systemName: isEditing ? "checkmark" : "pencil")
+                                    .font(.subheadline)
+                            }
                         }
                         Button(isEditMode ? "Save" : "Finish") { stopTimer(); saveAndDismiss() }
                             .fontWeight(.semibold)
@@ -961,126 +996,48 @@ struct ActiveWorkoutView: View {
 
     @ViewBuilder
     private func exerciseCard(_ exercise: ExerciseInfo, number: Int) -> some View {
-        let previous = previousSets(for: exercise.name)
         let sets = sessionSets[exercise.name] ?? []
-        let allDone = !sets.isEmpty && sets.allSatisfy { $0.completed }
+        let completedCount = sets.filter(\.completed).count
 
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("\(number)")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(allDone ? .white : .secondary)
-                    .frame(width: 24, height: 24)
-                    .background(allDone ? AppColors.accent : Color(.systemGray5), in: Circle())
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(exercise.name)
-                    .font(.body.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                 Spacer()
-                if !isEditMode, let suggestion = progressionSuggestion(for: exercise.name) {
-                    Text(suggestion)
-                        .font(.caption)
-                        .foregroundStyle(AppColors.accent)
-                }
+                Text("\(completedCount)/\(sets.count)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.bottom, 12)
 
-            if !isEditMode && !previous.isEmpty {
-                HStack(spacing: 12) {
-                    Text("Last:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(previous, id: \.setNumber) { set in
-                        Text("\(formatWeight(set.weight)) × \(set.reps)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            Rectangle()
+                .fill(Color(.separator).opacity(0.3))
+                .frame(height: 1)
+                .padding(.bottom, 10)
 
             HStack(spacing: 8) {
                 Text("SET")
-                    .frame(width: 28)
-                Text("LBS")
-                    .frame(width: 60)
-                Text("REPS")
-                    .frame(width: 60)
+                    .frame(width: 24, alignment: .center)
+                Text("WEIGHT")
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Text("")
-                    .frame(width: 44)
-                if isEditing {
-                    Text("")
-                        .frame(width: 28)
-                }
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
-
-            ForEach(Array(sets.enumerated()), id: \.element.id) { index, setEntry in
-                HStack(spacing: 8) {
-                    Text("\(index + 1)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 44)
-
-                    TextField("0", text: binding(exercise: exercise.name, index: index, keyPath: \.weight))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.center)
-                        .font(.body.weight(.semibold))
-                        .frame(width: 60, height: 44)
-                        .background(
-                            setEntry.completed ? AppColors.accent.opacity(0.1) : Color(.systemGray6),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
-                        .textFieldStyle(.plain)
-
-                    TextField("0", text: binding(exercise: exercise.name, index: index, keyPath: \.reps))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                        .font(.body.weight(.semibold))
-                        .frame(width: 60, height: 44)
-                        .background(
-                            setEntry.completed ? AppColors.accent.opacity(0.1) : Color(.systemGray6),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
-                        .textFieldStyle(.plain)
-
-                    Button {
-                        markSetDone(exercise: exercise.name, index: index)
-                    } label: {
-                        Image(systemName: setEntry.completed ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(setEntry.completed ? AppColors.success : Color(.systemGray4))
-                            .font(.title2)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-
-                    if isEditing {
-                        Button {
-                            withAnimation {
-                                _ = sessionSets[exercise.name]?.remove(at: index)
-                            }
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundStyle(.red)
-                                .font(.title3)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: 28)
-                    }
-                }
-            }
-
-            if isEditing {
-                Button {
-                    withAnimation {
-                        sessionSets[exercise.name, default: []].append(SetEntry())
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Set")
-                    }
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .frame(width: 8)
+                Text("REPS")
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Color.clear
+                    .frame(width: 36)
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.bottom, 8)
+
+            VStack(spacing: 8) {
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, setEntry in
+                    setRow(exercise: exercise.name, index: index, setEntry: setEntry)
                 }
             }
+
         }
         .padding()
         .background {
@@ -1088,6 +1045,80 @@ struct ActiveWorkoutView: View {
                 .fill(.fill.quinary)
         }
     }
+
+    // MARK: - Set Row
+
+    @ViewBuilder
+    private func setRow(exercise: String, index: Int, setEntry: SetEntry) -> some View {
+        let fieldBg: Color = setEntry.completed ? AppColors.accent.opacity(0.08) : Color(.systemBackground)
+        HStack(spacing: 8) {
+            Text("\(index + 1)")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(setEntry.completed ? AppColors.accent : Color(.tertiaryLabel))
+                .frame(width: 24)
+
+            valueField(
+                value: binding(exercise: exercise, index: index, keyPath: \.weight),
+                unit: "lbs",
+                keyboard: .decimalPad,
+                bg: fieldBg
+            )
+
+            Text("×")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+
+            valueField(
+                value: binding(exercise: exercise, index: index, keyPath: \.reps),
+                unit: "reps",
+                keyboard: .numberPad,
+                bg: fieldBg
+            )
+
+            Button {
+                markSetDone(exercise: exercise, index: index)
+            } label: {
+                ZStack {
+                    if setEntry.completed {
+                        Circle()
+                            .fill(AppColors.success)
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    } else {
+                        Circle()
+                            .stroke(Color(.systemGray4), lineWidth: 2)
+                            .frame(width: 30, height: 30)
+                    }
+                }
+                .frame(width: 36, height: 44)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func valueField(
+        value: Binding<String>,
+        unit: String,
+        keyboard: UIKeyboardType,
+        bg: Color
+    ) -> some View {
+        TextField("0", text: value)
+            .keyboardType(keyboard)
+            .multilineTextAlignment(.center)
+            .font(.body.weight(.bold))
+            .textFieldStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .frame(height: 54)
+        .background(bg, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.separator).opacity(0.2), lineWidth: 1)
+        )
+    }
+
 
     // MARK: - Helpers
 
