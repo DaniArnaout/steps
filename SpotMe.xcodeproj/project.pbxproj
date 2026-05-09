@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		333C72E22F9FB63400B28722 /* AnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 333C72E12F9FB63400B28722 /* AnalyticsView.swift */; };
 		3399744E2F9C3D9400DF4C05 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */; };
 		339974502F9C3D9400DF4C05 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */; };
 		339974612F9C3D9500DF4C05 /* StepsWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -39,7 +38,6 @@
 
 /* Begin PBXFileReference section */
 		331BF2342F9C5F93002DDDE3 /* StepsWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StepsWidgetExtension.entitlements; sourceTree = "<group>"; };
-		333C72E12F9FB63400B28722 /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsView.swift; sourceTree = "<group>"; };
 		3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StepsWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -119,7 +117,6 @@
 				339974512F9C3D9400DF4C05 /* StepsWidget */,
 				3399744C2F9C3D9400DF4C05 /* Frameworks */,
 				339EF5362F9C37A2003841BD /* Products */,
-				333C72E12F9FB63400B28722 /* AnalyticsView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -248,7 +245,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				333C72E22F9FB63400B28722 /* AnalyticsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,12 +265,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = StepsWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6GZ22225JJ;
+				DEVELOPMENT_TEAM = P5742DC39Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = StepsWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = StepsWidget;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Steps widget needs access to your step count data to display how many steps you've walked today.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -282,8 +280,9 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.Steps.StepsWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.SpotMe.SpotWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -300,12 +299,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = StepsWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6GZ22225JJ;
+				DEVELOPMENT_TEAM = P5742DC39Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = StepsWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = StepsWidget;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Steps widget needs access to your step count data to display how many steps you've walked today.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -313,8 +314,9 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.Steps.StepsWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.SpotMe.SpotWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -331,12 +333,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Steps/Steps.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6GZ22225JJ;
+				DEVELOPMENT_TEAM = P5742DC39Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Steps/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Spot Me";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -347,8 +351,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.Steps;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.SpotMe;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -365,12 +370,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Steps/Steps.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6GZ22225JJ;
+				DEVELOPMENT_TEAM = P5742DC39Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Steps/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Spot Me";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -381,8 +388,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.Steps;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.SpotMe;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
