@@ -136,7 +136,32 @@ struct SpotMeWidgetEntryView: View {
     // MARK: - Small: Steps Only
 
     private var smallWidget: some View {
-        VStack(spacing: 4) {
+        ZStack {
+            Circle()
+                .stroke(.quaternary, lineWidth: 10)
+            Circle()
+                .trim(from: 0, to: entry.stepProgress)
+                .stroke(entry.stepColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+
+            VStack(spacing: 0) {
+                Text("\(entry.steps)")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                Text("steps")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .containerBackground(.fill.tertiary, for: .widget)
+    }
+
+    // MARK: - Medium: Steps + Calories
+
+    private var mediumWidget: some View {
+        HStack(spacing: 32) {
             ZStack {
                 Circle()
                     .stroke(.quaternary, lineWidth: 10)
@@ -145,107 +170,34 @@ struct SpotMeWidgetEntryView: View {
                     .stroke(entry.stepColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .rotationEffect(.degrees(-90))
 
-                VStack(spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("\(entry.steps)")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .minimumScaleFactor(0.6)
-                            .contentTransition(.numericText())
-                        Text("steps")
-                            .font(.system(size: 9, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                    if entry.stepProgress >= 1.0 {
-                        Text("goal reached")
-                            .font(.system(size: 9))
-                            .foregroundStyle(accentGreen)
-                    } else {
-                        Text("\(entry.stepsRemaining.formatted()) left")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                    }
+                VStack(spacing: 0) {
+                    Text("\(entry.steps)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .minimumScaleFactor(0.6)
+                        .contentTransition(.numericText())
+                    Text("steps")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .padding(8)
-            Text("Steps")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-        }
-        .containerBackground(.fill.tertiary, for: .widget)
-    }
 
-    // MARK: - Medium: Steps + Calories
+            ZStack {
+                Circle()
+                    .stroke(.quaternary, lineWidth: 10)
+                Circle()
+                    .trim(from: 0, to: entry.calorieProgress)
+                    .stroke(entry.calorieColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
 
-    private var mediumWidget: some View {
-        HStack(spacing: 32) {
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle()
-                        .stroke(.quaternary, lineWidth: 10)
-                    Circle()
-                        .trim(from: 0, to: entry.stepProgress)
-                        .stroke(entry.stepColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-
-                    VStack(spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            Text("\(entry.steps)")
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .minimumScaleFactor(0.6)
-                                .contentTransition(.numericText())
-                            Text("steps")
-                                .font(.system(size: 9, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                        if entry.stepProgress >= 1.0 {
-                            Text("goal reached")
-                                .font(.system(size: 9))
-                                .foregroundStyle(accentGreen)
-                        } else {
-                            Text("\(entry.stepsRemaining.formatted()) left")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                VStack(spacing: 0) {
+                    Text("\(entry.calories)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .minimumScaleFactor(0.6)
+                        .contentTransition(.numericText())
+                    Text("kcal")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
-                Text("Steps")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle()
-                        .stroke(.quaternary, lineWidth: 10)
-                    Circle()
-                        .trim(from: 0, to: entry.calorieProgress)
-                        .stroke(entry.calorieColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-
-                    VStack(spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            Text("\(entry.calories)")
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .minimumScaleFactor(0.6)
-                                .contentTransition(.numericText())
-                            Text("kcal")
-                                .font(.system(size: 9, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                        if entry.calories > entry.calorieGoal {
-                            Text("\(entry.calories - entry.calorieGoal) over")
-                                .font(.system(size: 9))
-                                .foregroundStyle(dangerRed)
-                        } else {
-                            Text("\(entry.caloriesRemaining.formatted()) left")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                Text("Food")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(12)

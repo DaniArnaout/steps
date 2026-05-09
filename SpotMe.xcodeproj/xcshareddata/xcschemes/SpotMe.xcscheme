@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "339EF5342F9C37A2003841BD"
-               BuildableName = "Steps.app"
-               BlueprintName = "Steps"
+               BuildableName = "SpotMe.app"
+               BlueprintName = "SpotMe"
                ReferencedContainer = "container:SpotMe.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -46,8 +46,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "339EF5342F9C37A2003841BD"
-            BuildableName = "Steps.app"
-            BlueprintName = "Steps"
+            BuildableName = "SpotMe.app"
+            BlueprintName = "SpotMe"
             ReferencedContainer = "container:SpotMe.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -63,8 +63,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "339EF5342F9C37A2003841BD"
-            BuildableName = "Steps.app"
-            BlueprintName = "Steps"
+            BuildableName = "SpotMe.app"
+            BlueprintName = "SpotMe"
             ReferencedContainer = "container:SpotMe.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

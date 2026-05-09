@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		3399744E2F9C3D9400DF4C05 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */; };
 		339974502F9C3D9400DF4C05 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */; };
-		339974612F9C3D9500DF4C05 /* StepsWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		339974612F9C3D9500DF4C05 /* SpotMeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3399744B2F9C3D9400DF4C05 /* SpotMeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,7 +29,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				339974612F9C3D9500DF4C05 /* StepsWidgetExtension.appex in Embed Foundation Extensions */,
+				339974612F9C3D9500DF4C05 /* SpotMeWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -38,26 +38,26 @@
 
 /* Begin PBXFileReference section */
 		331BF2342F9C5F93002DDDE3 /* StepsWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StepsWidgetExtension.entitlements; sourceTree = "<group>"; };
-		3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StepsWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3399744B2F9C3D9400DF4C05 /* SpotMeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpotMeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		339EF5352F9C37A2003841BD /* Steps.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Steps.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		339EF5352F9C37A2003841BD /* SpotMe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpotMe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		339974652F9C3D9500DF4C05 /* Exceptions for "StepsWidget" folder in "StepsWidgetExtension" target */ = {
+		339974652F9C3D9500DF4C05 /* Exceptions for "StepsWidget" folder in "SpotMeWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */;
+			target = 3399744A2F9C3D9400DF4C05 /* SpotMeWidgetExtension */;
 		};
-		339EF5422F9C37A3003841BD /* Exceptions for "Steps" folder in "Steps" target */ = {
+		339EF5422F9C37A3003841BD /* Exceptions for "Steps" folder in "SpotMe" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 339EF5342F9C37A2003841BD /* Steps */;
+			target = 339EF5342F9C37A2003841BD /* SpotMe */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -65,7 +65,7 @@
 		339974512F9C3D9400DF4C05 /* StepsWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				339974652F9C3D9500DF4C05 /* Exceptions for "StepsWidget" folder in "StepsWidgetExtension" target */,
+				339974652F9C3D9500DF4C05 /* Exceptions for "StepsWidget" folder in "SpotMeWidgetExtension" target */,
 			);
 			path = StepsWidget;
 			sourceTree = "<group>";
@@ -73,7 +73,7 @@
 		339EF5372F9C37A2003841BD /* Steps */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				339EF5422F9C37A3003841BD /* Exceptions for "Steps" folder in "Steps" target */,
+				339EF5422F9C37A3003841BD /* Exceptions for "Steps" folder in "SpotMe" target */,
 			);
 			path = Steps;
 			sourceTree = "<group>";
@@ -123,8 +123,8 @@
 		339EF5362F9C37A2003841BD /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				339EF5352F9C37A2003841BD /* Steps.app */,
-				3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */,
+				339EF5352F9C37A2003841BD /* SpotMe.app */,
+				3399744B2F9C3D9400DF4C05 /* SpotMeWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -132,9 +132,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */ = {
+		3399744A2F9C3D9400DF4C05 /* SpotMeWidgetExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 339974622F9C3D9500DF4C05 /* Build configuration list for PBXNativeTarget "StepsWidgetExtension" */;
+			buildConfigurationList = 339974622F9C3D9500DF4C05 /* Build configuration list for PBXNativeTarget "SpotMeWidgetExtension" */;
 			buildPhases = (
 				339974472F9C3D9400DF4C05 /* Sources */,
 				339974482F9C3D9400DF4C05 /* Frameworks */,
@@ -147,16 +147,16 @@
 			fileSystemSynchronizedGroups = (
 				339974512F9C3D9400DF4C05 /* StepsWidget */,
 			);
-			name = StepsWidgetExtension;
+			name = SpotMeWidgetExtension;
 			packageProductDependencies = (
 			);
 			productName = StepsWidgetExtension;
-			productReference = 3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */;
+			productReference = 3399744B2F9C3D9400DF4C05 /* SpotMeWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		339EF5342F9C37A2003841BD /* Steps */ = {
+		339EF5342F9C37A2003841BD /* SpotMe */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 339EF5432F9C37A3003841BD /* Build configuration list for PBXNativeTarget "Steps" */;
+			buildConfigurationList = 339EF5432F9C37A3003841BD /* Build configuration list for PBXNativeTarget "SpotMe" */;
 			buildPhases = (
 				339EF5312F9C37A2003841BD /* Sources */,
 				339EF5322F9C37A2003841BD /* Frameworks */,
@@ -171,11 +171,11 @@
 			fileSystemSynchronizedGroups = (
 				339EF5372F9C37A2003841BD /* Steps */,
 			);
-			name = Steps;
+			name = SpotMe;
 			packageProductDependencies = (
 			);
 			productName = Steps;
-			productReference = 339EF5352F9C37A2003841BD /* Steps.app */;
+			productReference = 339EF5352F9C37A2003841BD /* SpotMe.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -210,8 +210,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				339EF5342F9C37A2003841BD /* Steps */,
-				3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */,
+				339EF5342F9C37A2003841BD /* SpotMe */,
+				3399744A2F9C3D9400DF4C05 /* SpotMeWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -253,7 +253,7 @@
 /* Begin PBXTargetDependency section */
 		339974602F9C3D9500DF4C05 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */;
+			target = 3399744A2F9C3D9400DF4C05 /* SpotMeWidgetExtension */;
 			targetProxy = 3399745F2F9C3D9500DF4C05 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -525,7 +525,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		339974622F9C3D9500DF4C05 /* Build configuration list for PBXNativeTarget "StepsWidgetExtension" */ = {
+		339974622F9C3D9500DF4C05 /* Build configuration list for PBXNativeTarget "SpotMeWidgetExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				339974632F9C3D9500DF4C05 /* Debug */,
@@ -543,7 +543,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		339EF5432F9C37A3003841BD /* Build configuration list for PBXNativeTarget "Steps" */ = {
+		339EF5432F9C37A3003841BD /* Build configuration list for PBXNativeTarget "SpotMe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				339EF5442F9C37A3003841BD /* Debug */,
