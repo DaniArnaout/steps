@@ -6,11 +6,54 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		333C72E22F9FB63400B28722 /* AnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 333C72E12F9FB63400B28722 /* AnalyticsView.swift */; };
+		3399744E2F9C3D9400DF4C05 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */; };
+		339974502F9C3D9400DF4C05 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */; };
+		339974612F9C3D9500DF4C05 /* StepsWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3399745F2F9C3D9500DF4C05 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 339EF52D2F9C37A2003841BD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3399744A2F9C3D9400DF4C05;
+			remoteInfo = StepsWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		339974662F9C3D9500DF4C05 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				339974612F9C3D9500DF4C05 /* StepsWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		331BF2342F9C5F93002DDDE3 /* StepsWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StepsWidgetExtension.entitlements; sourceTree = "<group>"; };
+		333C72E12F9FB63400B28722 /* AnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsView.swift; sourceTree = "<group>"; };
+		3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StepsWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		339EF5352F9C37A2003841BD /* Steps.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Steps.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		339974652F9C3D9500DF4C05 /* Exceptions for "StepsWidget" folder in "StepsWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */;
+		};
 		339EF5422F9C37A3003841BD /* Exceptions for "Steps" folder in "Steps" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -21,6 +64,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		339974512F9C3D9400DF4C05 /* StepsWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				339974652F9C3D9500DF4C05 /* Exceptions for "StepsWidget" folder in "StepsWidgetExtension" target */,
+			);
+			path = StepsWidget;
+			sourceTree = "<group>";
+		};
 		339EF5372F9C37A2003841BD /* Steps */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -32,6 +83,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		339974482F9C3D9400DF4C05 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				339974502F9C3D9400DF4C05 /* SwiftUI.framework in Frameworks */,
+				3399744E2F9C3D9400DF4C05 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		339EF5322F9C37A2003841BD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -42,11 +102,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		3399744C2F9C3D9400DF4C05 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3399744D2F9C3D9400DF4C05 /* WidgetKit.framework */,
+				3399744F2F9C3D9400DF4C05 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		339EF52C2F9C37A2003841BD = {
 			isa = PBXGroup;
 			children = (
+				331BF2342F9C5F93002DDDE3 /* StepsWidgetExtension.entitlements */,
 				339EF5372F9C37A2003841BD /* Steps */,
+				339974512F9C3D9400DF4C05 /* StepsWidget */,
+				3399744C2F9C3D9400DF4C05 /* Frameworks */,
 				339EF5362F9C37A2003841BD /* Products */,
+				333C72E12F9FB63400B28722 /* AnalyticsView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -54,6 +127,7 @@
 			isa = PBXGroup;
 			children = (
 				339EF5352F9C37A2003841BD /* Steps.app */,
+				3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,6 +135,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 339974622F9C3D9500DF4C05 /* Build configuration list for PBXNativeTarget "StepsWidgetExtension" */;
+			buildPhases = (
+				339974472F9C3D9400DF4C05 /* Sources */,
+				339974482F9C3D9400DF4C05 /* Frameworks */,
+				339974492F9C3D9400DF4C05 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				339974512F9C3D9400DF4C05 /* StepsWidget */,
+			);
+			name = StepsWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = StepsWidgetExtension;
+			productReference = 3399744B2F9C3D9400DF4C05 /* StepsWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		339EF5342F9C37A2003841BD /* Steps */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 339EF5432F9C37A3003841BD /* Build configuration list for PBXNativeTarget "Steps" */;
@@ -68,10 +164,12 @@
 				339EF5312F9C37A2003841BD /* Sources */,
 				339EF5322F9C37A2003841BD /* Frameworks */,
 				339EF5332F9C37A2003841BD /* Resources */,
+				339974662F9C3D9500DF4C05 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				339974602F9C3D9500DF4C05 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				339EF5372F9C37A2003841BD /* Steps */,
@@ -93,6 +191,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					3399744A2F9C3D9400DF4C05 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 					339EF5342F9C37A2003841BD = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -113,11 +214,19 @@
 			projectRoot = "";
 			targets = (
 				339EF5342F9C37A2003841BD /* Steps */,
+				3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		339974492F9C3D9400DF4C05 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		339EF5332F9C37A2003841BD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -128,16 +237,94 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		339EF5312F9C37A2003841BD /* Sources */ = {
+		339974472F9C3D9400DF4C05 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		339EF5312F9C37A2003841BD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				333C72E22F9FB63400B28722 /* AnalyticsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		339974602F9C3D9500DF4C05 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3399744A2F9C3D9400DF4C05 /* StepsWidgetExtension */;
+			targetProxy = 3399745F2F9C3D9500DF4C05 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		339974632F9C3D9500DF4C05 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = StepsWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6GZ22225JJ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StepsWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StepsWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.Steps.StepsWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		339974642F9C3D9500DF4C05 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = StepsWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6GZ22225JJ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StepsWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StepsWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daniarnaout.Steps.StepsWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		339EF5442F9C37A3003841BD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -146,7 +333,7 @@
 				CODE_SIGN_ENTITLEMENTS = Steps/Steps.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YZ4X34DZAW;
+				DEVELOPMENT_TEAM = 6GZ22225JJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Steps/Info.plist;
@@ -180,7 +367,7 @@
 				CODE_SIGN_ENTITLEMENTS = Steps/Steps.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YZ4X34DZAW;
+				DEVELOPMENT_TEAM = 6GZ22225JJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Steps/Info.plist;
@@ -330,6 +517,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		339974622F9C3D9500DF4C05 /* Build configuration list for PBXNativeTarget "StepsWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				339974632F9C3D9500DF4C05 /* Debug */,
+				339974642F9C3D9500DF4C05 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		339EF5302F9C37A2003841BD /* Build configuration list for PBXProject "Steps" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
