@@ -27,8 +27,8 @@ final class GoalStore {
     init() {
         let d = UserDefaults.standard
         self.stepGoal = d.object(forKey: "goalSteps") as? Int ?? 7000
-        self.calorieGoal = d.object(forKey: "goalCalories") as? Int ?? 2400
-        self.proteinGoal = d.object(forKey: "goalProtein") as? Int ?? 120
+        self.calorieGoal = d.object(forKey: "goalCalories") as? Int ?? 2000
+        self.proteinGoal = d.object(forKey: "goalProtein") as? Int ?? 100
         self.gymGoal = d.object(forKey: "goalGym") as? Int ?? 3
         self.requireSteps = d.object(forKey: "requireSteps") as? Bool ?? true
         self.requireCalories = d.object(forKey: "requireCalories") as? Bool ?? true
@@ -722,7 +722,7 @@ struct LogWeightSheet: View {
                         Text("Body Fat (%)")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
-                        TextField("—", text: $bodyFatText)
+                        TextField("0", text: $bodyFatText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.center)
                             .font(.title2.weight(.bold))
@@ -925,7 +925,7 @@ struct GoalsSettingsSheet: View {
                         icon: "fork.knife",
                         title: "Calories",
                         value: $caloriesText,
-                        placeholder: "2400",
+                        placeholder: "2000",
                         unit: "kcal",
                         isRequired: $requireCalories
                     )
@@ -933,7 +933,7 @@ struct GoalsSettingsSheet: View {
                         icon: "fish.fill",
                         title: "Protein",
                         value: $proteinText,
-                        placeholder: "120",
+                        placeholder: "100",
                         unit: "g",
                         isRequired: $requireProtein
                     )
@@ -946,9 +946,58 @@ struct GoalsSettingsSheet: View {
                         isRequired: $requireGym
                     )
                 } header: {
-                    Text("Goals & Day Completion")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Goals & Day Completion")
+                        Text("Toggle on to count toward a completed day.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
+                    }
                 } footer: {
-                    Text("Toggle on to count toward a completed day.")
+                    Text("\u{2139}\u{fe0f} Suggested defaults (7,000 steps · 2,000 kcal · 100g protein · 3 gym days) are based on guidance from the CDC, USDA, NIH, and WHO. See Health Information Sources below for details.")
+                }
+
+                Section {
+                    sourceLink(
+                        icon: "figure.walk",
+                        title: "Daily Activity",
+                        source: "CDC Physical Activity Guidelines",
+                        url: "https://www.cdc.gov/physical-activity-basics/guidelines/adults.html"
+                    )
+                    sourceLink(
+                        icon: "fork.knife",
+                        title: "Daily Calories",
+                        source: "U.S. Dietary Guidelines (HHS/USDA)",
+                        url: "https://odphp.health.gov/our-work/nutrition-physical-activity/dietary-guidelines"
+                    )
+                    sourceLink(
+                        icon: "fish.fill",
+                        title: "Daily Protein",
+                        source: "NIH MedlinePlus",
+                        url: "https://medlineplus.gov/dietaryproteins.html"
+                    )
+                    sourceLink(
+                        icon: "dumbbell.fill",
+                        title: "Strength Training",
+                        source: "WHO Physical Activity",
+                        url: "https://www.who.int/news-room/fact-sheets/detail/physical-activity"
+                    )
+                    sourceLink(
+                        icon: "timer",
+                        title: "Rest Between Sets",
+                        source: "American College of Sports Medicine",
+                        url: "https://www.acsm.org/"
+                    )
+                    sourceLink(
+                        icon: "scalemass.fill",
+                        title: "Body Weight & Fat",
+                        source: "NIH NIDDK Weight Management",
+                        url: "https://www.niddk.nih.gov/health-information/weight-management"
+                    )
+                } header: {
+                    Text("Health Information Sources")
+                } footer: {
+                    Text("Always consult a healthcare professional for personalized advice.")
                 }
 
                 Section {
@@ -959,8 +1008,29 @@ struct GoalsSettingsSheet: View {
                             Text("Contact Us")
                             Spacer()
                             Text("hello@deadsimple.tools")
-                                .font(.caption)
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                    Link(destination: URL(string: "https://github.com/DaniArnaout/steps/blob/main/docs/support.html")!) {
+                        HStack {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(AppColors.accent)
+                            Text("Support")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.subheadline)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Link(destination: URL(string: "https://github.com/DaniArnaout/steps/blob/main/docs/privacy.html")!) {
+                        HStack {
+                            Image(systemName: "lock.shield")
+                                .foregroundStyle(AppColors.accent)
+                            Text("Privacy Policy")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.subheadline)
+                                .foregroundStyle(.tertiary)
                         }
                     }
                 } footer: {
@@ -997,6 +1067,29 @@ struct GoalsSettingsSheet: View {
                 requireCalories = goalStore.requireCalories
                 requireProtein = goalStore.requireProtein
                 requireGym = goalStore.requireGym
+            }
+        }
+    }
+
+    private func sourceLink(icon: String, title: String, source: String, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.accent)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                    Text(source)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right.square")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
             }
         }
     }

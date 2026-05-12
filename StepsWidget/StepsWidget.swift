@@ -13,7 +13,7 @@ private func loadStepGoal() -> Int {
 }
 
 private func loadCalorieGoal() -> Int {
-    UserDefaults(suiteName: appGroupID)?.object(forKey: "goalCalories") as? Int ?? 2400
+    UserDefaults(suiteName: appGroupID)?.object(forKey: "goalCalories") as? Int ?? 2000
 }
 
 struct SpotMeEntry: TimelineEntry {
@@ -303,11 +303,11 @@ struct RestTimerLiveActivity: Widget {
 #Preview(as: .systemSmall) {
     SpotMeWidget()
 } timeline: {
-    SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2400)
+    SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2000)
 }
 
 #Preview(as: .systemMedium) {
     SpotMeWidget()
 } timeline: {
-    SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2400)
+    SpotMeEntry(date: .now, steps: 4832, calories: 1200, stepGoal: 7000, calorieGoal: 2000)
 }

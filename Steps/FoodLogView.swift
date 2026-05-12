@@ -122,7 +122,7 @@ class PresetStore {
 }
 
 struct FoodLogView: View {
-    static let dailyCalorieGoal = 2400
+    static let dailyCalorieGoal = 2000
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FoodEntry.date, order: .reverse) private var allEntries: [FoodEntry]

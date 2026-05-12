@@ -1293,7 +1293,7 @@ struct WorkoutSettingsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Rest Timer") {
+                Section {
                     HStack(spacing: 0) {
                         Spacer()
                         Picker("Minutes", selection: $minutes) {
@@ -1325,9 +1325,13 @@ struct WorkoutSettingsSheet: View {
                     }
                     .frame(height: 150)
                     .listRowInsets(EdgeInsets())
+                } header: {
+                    Text("Rest Timer")
+                } footer: {
+                    Text("Default 2 minutes is based on ACSM strength-training guidance. Adjust to fit your routine.")
                 }
 
-                Section("Workouts") {
+                Section {
                     ForEach(workoutTypes) { type in
                         let exerciseCount = allExercises.filter { $0.categoryName == type.name }.count
                         NavigationLink {
@@ -1372,6 +1376,10 @@ struct WorkoutSettingsSheet: View {
                             Text("Add Workout")
                         }
                     }
+                } header: {
+                    Text("Workouts")
+                } footer: {
+                    Text("Suggested exercises, default weights and rep ranges are based on general strength-training guidance from the WHO and ACSM. Customize anytime.")
                 }
             }
             .navigationTitle("Workout Settings")
@@ -2629,11 +2637,18 @@ struct NotificationPromptOverlay: View {
     let onAllow: () -> Void
     let onSkip: () -> Void
 
+    @State private var countdownValue: Int = 3
+    @State private var countdownTask: Task<Void, Never>?
+
     private var formattedDuration: String {
         let m = restDuration / 60
         let s = restDuration % 60
         if s == 0 { return "\(m) minute\(m == 1 ? "" : "s")" }
         return "\(m)m \(s)s"
+    }
+
+    private var countdownDisplay: String {
+        countdownValue > 0 ? "\(countdownValue)" : "GO"
     }
 
     var body: some View {
@@ -2642,37 +2657,49 @@ struct NotificationPromptOverlay: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Image(systemName: "bell.badge.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(AppColors.accent)
-                    .padding(.top, 8)
-
-                VStack(spacing: 8) {
-                    Text("Stay on Track")
-                        .font(.title3.weight(.bold))
-                    Text("We'll notify you when your \(formattedDuration) rest between sets is over so you can focus on your workout.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                ZStack {
+                    Circle()
+                        .stroke(AppColors.accent.opacity(0.2), lineWidth: 4)
+                        .frame(width: 96, height: 96)
+                    Circle()
+                        .trim(from: 0, to: countdownValue > 0 ? CGFloat(countdownValue) / 3.0 : 1.0)
+                        .stroke(AppColors.accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 96, height: 96)
+                        .animation(.easeInOut(duration: 0.4), value: countdownValue)
+                    Text(countdownDisplay)
+                        .font(.system(size: countdownValue > 0 ? 44 : 32, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppColors.accent)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: countdownValue)
                 }
+                .padding(.top, 4)
+
+                Text("Get notified when your rest time is up.")
+                    .font(.title3.weight(.bold))
+                    .multilineTextAlignment(.center)
 
                 VStack(spacing: 10) {
                     Button {
                         onAllow()
                     } label: {
-                        Text("Enable Notifications")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 12))
-                            .foregroundStyle(.white)
+                        HStack(spacing: 8) {
+                            Image(systemName: "timer")
+                                .font(.subheadline.weight(.semibold))
+                            Text("Notify me")
+                                .font(.body.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
 
                     Button {
                         onSkip()
                     } label: {
-                        Text("Not Now")
+                        Text("Don't notify")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -2685,6 +2712,27 @@ struct NotificationPromptOverlay: View {
             .transition(.scale(scale: 0.9).combined(with: .opacity))
         }
         .animation(.easeOut(duration: 0.2), value: true)
+        .onAppear { startCountdown() }
+        .onDisappear { countdownTask?.cancel() }
+    }
+
+    private func startCountdown() {
+        countdownTask?.cancel()
+        countdownValue = 3
+        countdownTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { break }
+                if countdownValue > 0 {
+                    countdownValue -= 1
+                } else {
+                    try? await Task.sleep(for: .seconds(1))
+                    if !Task.isCancelled {
+                        countdownValue = 3
+                    }
+                }
+            }
+        }
     }
 }
 
