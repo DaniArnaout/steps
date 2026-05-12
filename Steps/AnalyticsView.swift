@@ -35,7 +35,9 @@ struct AnalyticsView: View {
 
     @State private var selectedRange: TimeRange = .week
     @State private var stepHistory: [DaySteps] = []
-    @State private var isLoadingSteps = true
+    @State private var dailyNutritionData: [DailyNutrition] = []
+    @State private var stepsData: [DaySteps] = []
+    @State private var isLoading = true
     @State private var selectedStepDate: Date?
     @State private var selectedCalorieDate: Date?
     @State private var selectedProteinDate: Date?
@@ -55,13 +57,27 @@ struct AnalyticsView: View {
         dateRange.first ?? Date()
     }
 
-    private var dailyNutrition: [DailyNutrition] {
+    private func loadData() async {
+        isLoading = true
+        let range = dateRange
+        let start = range.first ?? Date()
+
+        let steps = await stepCounter.fetchHistory(days: selectedRange.days)
+
         let calendar = Calendar.current
-        let filtered = allFoodEntries.filter { $0.date >= startDate }
+        let stepsByDay = Dictionary(uniqueKeysWithValues: steps.map {
+            (calendar.startOfDay(for: $0.date), $0)
+        })
+        let computedSteps = range.map { date in
+            let dayStart = calendar.startOfDay(for: date)
+            return stepsByDay[dayStart] ?? DaySteps(date: dayStart, steps: 0)
+        }
+
+        let filtered = allFoodEntries.filter { $0.date >= start }
         let grouped = Dictionary(grouping: filtered) { entry in
             calendar.startOfDay(for: entry.date)
         }
-        return dateRange.map { date in
+        let computedNutrition = range.map { date in
             let dayStart = calendar.startOfDay(for: date)
             let entries = grouped[dayStart] ?? []
             return DailyNutrition(
@@ -70,16 +86,12 @@ struct AnalyticsView: View {
                 protein: entries.reduce(0) { $0 + $1.protein }
             )
         }
-    }
 
-    private var stepsForRange: [DaySteps] {
-        let calendar = Calendar.current
-        return dateRange.map { date in
-            let dayStart = calendar.startOfDay(for: date)
-            if let existing = stepHistory.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
-                return existing
-            }
-            return DaySteps(date: dayStart, steps: 0)
+        withAnimation {
+            stepHistory = steps
+            stepsData = computedSteps
+            dailyNutritionData = computedNutrition
+            isLoading = false
         }
     }
 
@@ -138,14 +150,19 @@ struct AnalyticsView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal)
 
-                    stepsChartSection
-                    caloriesChartSection
-                    proteinChartSection
-                    if !weightInRange.isEmpty {
-                        weightChartSection
-                    }
-                    if weightInRange.contains(where: { $0.bodyFat > 0 }) {
-                        bodyFatChartSection
+                    if isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 300)
+                    } else {
+                        stepsChartSection
+                        caloriesChartSection
+                        proteinChartSection
+                        if !weightInRange.isEmpty {
+                            weightChartSection
+                        }
+                        if weightInRange.contains(where: { $0.bodyFat > 0 }) {
+                            bodyFatChartSection
+                        }
                     }
                 }
                 .padding(.bottom, 32)
@@ -166,20 +183,14 @@ struct AnalyticsView: View {
                 ContactUsSheet()
             }
             .task {
-                await fetchSteps()
+                await loadData()
             }
             .onChange(of: selectedRange) {
-                isLoadingSteps = true
-                Task { await fetchSteps() }
+                Task { await loadData() }
             }
-        }
-    }
-
-    private func fetchSteps() async {
-        let result = await stepCounter.fetchHistory(days: selectedRange.days)
-        withAnimation {
-            stepHistory = result
-            isLoadingSteps = false
+            .onChange(of: allFoodEntries.count) {
+                Task { await loadData() }
+            }
         }
     }
 
@@ -187,19 +198,19 @@ struct AnalyticsView: View {
 
     private var selectedStepValue: String? {
         guard let selected = selectedStepDate,
-              let day = stepsForRange.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
+              let day = stepsData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
         return "\(day.steps) steps"
     }
 
     private var selectedCalorieValue: String? {
         guard let selected = selectedCalorieDate,
-              let day = dailyNutrition.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
+              let day = dailyNutritionData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
         return "\(day.calories) kcal"
     }
 
     private var selectedProteinValue: String? {
         guard let selected = selectedProteinDate,
-              let day = dailyNutrition.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
+              let day = dailyNutritionData.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
         return "\(day.protein)g"
     }
 
@@ -223,10 +234,6 @@ struct AnalyticsView: View {
                     Text("Steps")
                 }
                 .font(.subheadline.weight(.semibold))
-                if isLoadingSteps {
-                    ProgressView()
-                        .controlSize(.small)
-                }
                 Spacer()
                 if let value = selectedStepValue {
                     Text(value)
@@ -244,7 +251,7 @@ struct AnalyticsView: View {
             }
 
             Chart {
-                ForEach(stepsForRange) { day in
+                ForEach(stepsData) { day in
                     BarMark(
                         x: .value("Date", day.date, unit: .day),
                         y: .value("Steps", day.steps)
@@ -306,7 +313,7 @@ struct AnalyticsView: View {
             }
 
             Chart {
-                ForEach(dailyNutrition) { day in
+                ForEach(dailyNutritionData) { day in
                     BarMark(
                         x: .value("Date", day.date, unit: .day),
                         y: .value("Calories", day.calories)
@@ -355,7 +362,7 @@ struct AnalyticsView: View {
             }
 
             Chart {
-                ForEach(dailyNutrition) { day in
+                ForEach(dailyNutritionData) { day in
                     BarMark(
                         x: .value("Date", day.date, unit: .day),
                         y: .value("Protein", day.protein)

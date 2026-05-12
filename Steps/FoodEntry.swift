@@ -84,13 +84,15 @@ final class WorkoutSet {
     var reps: Int = 0
     var setNumber: Int = 0
     var date: Date = Date.now
+    var workoutID: String = ""
 
-    init(exerciseName: String, weight: Double, reps: Int, setNumber: Int, date: Date = .now) {
+    init(exerciseName: String, weight: Double, reps: Int, setNumber: Int, date: Date = .now, workoutID: String = "") {
         self.exerciseName = exerciseName
         self.weight = weight
         self.reps = reps
         self.setNumber = setNumber
         self.date = date
+        self.workoutID = workoutID
     }
 }
 
@@ -98,10 +100,12 @@ final class WorkoutSet {
 final class GymEntry {
     var date: Date = Date.now
     var duration: Int = 0
+    var workoutID: String = ""
 
-    init(date: Date = .now, duration: Int = 0) {
+    init(date: Date = .now, duration: Int = 0, workoutID: String = "") {
         self.date = date
         self.duration = duration
+        self.workoutID = workoutID
     }
 }
 

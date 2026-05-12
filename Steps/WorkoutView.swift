@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import ActivityKit
+import UserNotifications
 
 struct WorkoutType: Identifiable, Hashable, Codable {
     var id: String { name }
@@ -24,7 +25,16 @@ struct ExerciseInfo: Identifiable, Hashable, Codable {
 struct EditWorkoutInfo: Identifiable {
     let date: Date
     let workoutType: WorkoutType
-    var id: Date { date }
+    let workoutID: String
+    var id: String { workoutID }
+}
+
+struct WorkoutDetailInfo: Identifiable {
+    let id: String
+    let date: Date
+    let workoutType: WorkoutType
+    let duration: Int
+    let journeyData: [JourneyBlock]
 }
 
 // MARK: - Live Activity
@@ -44,6 +54,7 @@ struct JourneySetInfo: Identifiable {
     let weight: String
     let reps: String
     let setNumber: Int
+    let completionOrder: Int
 }
 
 struct JourneyBlock: Identifiable {
@@ -72,7 +83,10 @@ struct WorkoutView: View {
     @State private var showingCategoryPicker = false
     @State private var showingSettings = false
     @State private var showingContact = false
-    @State private var expandedWorkouts: Set<Date> = []
+    @State private var detailWorkout: WorkoutDetailInfo?
+    @State private var showingNotificationPrompt = false
+    @State private var pendingWorkoutType: WorkoutType?
+    @AppStorage("hasRequestedNotifications") private var hasRequestedNotifications = false
     @AppStorage("restTimerSeconds") private var restDuration: Int = 120
     @AppStorage("customExercisesJSON") private var customExercisesJSON: String = "[]"
     @AppStorage("customWorkoutTypesJSON") private var customWorkoutTypesJSON: String = "[]"
@@ -164,20 +178,61 @@ struct WorkoutView: View {
         }
     }
 
-    private var recentWorkouts: [(date: Date, workoutType: WorkoutType, exerciseCount: Int, duration: Int)] {
+    private func setsForEntry(_ entry: GymEntry) -> [WorkoutSet] {
+        if !entry.workoutID.isEmpty {
+            return allSets.filter { $0.workoutID == entry.workoutID }
+        }
+        return allSets.filter { $0.date == entry.date }
+    }
+
+    private func buildDetailInfo(for workout: (date: Date, workoutType: WorkoutType, exerciseCount: Int, duration: Int, workoutID: String)) -> WorkoutDetailInfo {
+        let entry = gymEntries.first { e in
+            !e.workoutID.isEmpty ? e.workoutID == workout.workoutID : e.date == workout.date
+        }
+        let sets: [WorkoutSet]
+        if let entry, !entry.workoutID.isEmpty {
+            sets = allSets.filter { $0.workoutID == entry.workoutID }
+        } else {
+            sets = allSets.filter { $0.date == workout.date }
+        }
+        let grouped = Dictionary(grouping: sets) { $0.exerciseName }
+        let sortedNames = grouped.keys.sorted()
+        let blocks = sortedNames.map { name in
+            let exerciseSets = grouped[name]!.sorted { $0.setNumber < $1.setNumber }
+            let journeySets = exerciseSets.enumerated().map { idx, ws in
+                JourneySetInfo(
+                    weight: formatWeight(ws.weight),
+                    reps: "\(ws.reps)",
+                    setNumber: idx + 1,
+                    completionOrder: idx
+                )
+            }
+            return JourneyBlock(exerciseName: name, sets: journeySets)
+        }
+        return WorkoutDetailInfo(
+            id: workout.workoutID,
+            date: workout.date,
+            workoutType: workout.workoutType,
+            duration: workout.duration,
+            journeyData: blocks
+        )
+    }
+
+    private var recentWorkouts: [(date: Date, workoutType: WorkoutType, exerciseCount: Int, duration: Int, workoutID: String)] {
         return gymEntries.prefix(20).compactMap { entry in
-            let sets = allSets.filter { $0.date == entry.date }
+            let sets = setsForEntry(entry)
             guard !sets.isEmpty else { return nil }
+            let id = entry.workoutID.isEmpty ? "\(entry.date.timeIntervalSinceReferenceDate)" : entry.workoutID
             let exerciseNames = Set(sets.map(\.exerciseName))
             let matchedType = allWorkoutTypes.first { type in
                 let typeExercises = allExercises.filter { $0.categoryName == type.name }
                 return typeExercises.contains { exerciseNames.contains($0.name) }
-            } ?? WorkoutType.upper
-            return (entry.date, matchedType, exerciseNames.count, entry.duration)
+            } ?? WorkoutType(name: "Workout", icon: "dumbbell.fill", isBuiltIn: false)
+            return (entry.date, matchedType, exerciseNames.count, entry.duration, id)
         }
     }
 
-    private var groupedByDay: [(day: Date, workouts: [(date: Date, workoutType: WorkoutType, exerciseCount: Int, duration: Int)])] {
+    private var groupedByDay: [(day: Date, workouts: [(date: Date, workoutType: WorkoutType, exerciseCount: Int, duration: Int, workoutID: String)])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: recentWorkouts) { workout in
             calendar.startOfDay(for: workout.date)
@@ -213,14 +268,17 @@ struct WorkoutView: View {
     private func deleteWorkouts(at offsets: IndexSet) {
         for offset in offsets {
             let workout = recentWorkouts[offset]
-            let setsToDelete = allSets.filter { $0.date == workout.date }
-            for set in setsToDelete {
-                modelContext.delete(set)
+            let entry = gymEntries.first { e in
+                !e.workoutID.isEmpty ? e.workoutID == workout.workoutID : e.date == workout.date
             }
-            let entriesToDelete = gymEntries.filter { $0.date == workout.date }
-            for entry in entriesToDelete {
-                modelContext.delete(entry)
+            let setsToDelete: [WorkoutSet]
+            if let entry, !entry.workoutID.isEmpty {
+                setsToDelete = allSets.filter { $0.workoutID == entry.workoutID }
+            } else {
+                setsToDelete = allSets.filter { $0.date == workout.date }
             }
+            for set in setsToDelete { modelContext.delete(set) }
+            if let entry { modelContext.delete(entry) }
         }
         try? modelContext.save()
     }
@@ -251,66 +309,51 @@ struct WorkoutView: View {
                     List {
                         ForEach(groupedByDay, id: \.day) { group in
                             Section {
-                                ForEach(group.workouts, id: \.date) { workout in
-                                    let isExpanded = expandedWorkouts.contains(workout.date)
-                                    VStack(spacing: 0) {
+                                ForEach(group.workouts, id: \.workoutID) { workout in
+                                    Button {
+                                        detailWorkout = buildDetailInfo(for: workout)
+                                    } label: {
                                         HStack(spacing: 12) {
-                                            Button {
-                                                editWorkout = EditWorkoutInfo(date: workout.date, workoutType: workout.workoutType)
-                                            } label: {
-                                                HStack(spacing: 12) {
-                                                    Image(systemName: workout.workoutType.icon)
-                                                        .font(.title3)
-                                                        .foregroundStyle(AppColors.accent)
-                                                        .frame(width: 32)
-                                                    Text(workout.workoutType.name)
-                                                        .font(.body.weight(.medium))
-                                                    Spacer()
-                                                    VStack(alignment: .trailing, spacing: 3) {
-                                                        Text("\(workout.exerciseCount) exercises")
-                                                            .font(.subheadline)
-                                                            .foregroundStyle(.secondary)
-                                                        if workout.duration > 0 {
-                                                            Text(formatDuration(workout.duration))
-                                                                .font(.caption)
-                                                                .foregroundStyle(.secondary)
-                                                        }
-                                                    }
+                                            Image(systemName: workout.workoutType.icon)
+                                                .font(.title3)
+                                                .foregroundStyle(AppColors.accent)
+                                                .frame(width: 32)
+                                            Text(workout.workoutType.name)
+                                                .font(.body.weight(.medium))
+                                                .foregroundStyle(Color(.label))
+                                            Spacer()
+                                            VStack(alignment: .trailing, spacing: 3) {
+                                                Text("\(workout.exerciseCount) exercises")
+                                                    .font(.subheadline)
+                                                    .foregroundStyle(.secondary)
+                                                if workout.duration > 0 {
+                                                    Text(formatDuration(workout.duration))
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
                                                 }
                                             }
-                                            .buttonStyle(.plain)
-
-                                            Button {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    if isExpanded {
-                                                        expandedWorkouts.remove(workout.date)
-                                                    } else {
-                                                        expandedWorkouts.insert(workout.date)
-                                                    }
-                                                }
-                                            } label: {
-                                                Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle")
-                                                    .font(.title3)
-                                                    .foregroundStyle(isExpanded ? AppColors.accent : Color(.tertiaryLabel))
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-
-                                        if isExpanded {
-                                            Divider()
-                                                .padding(.top, 10)
-                                            exerciseDetailsView(for: workout.date)
-                                                .padding(.vertical, 10)
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(.tertiary)
                                         }
                                     }
+                                    .buttonStyle(.plain)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                         Button(role: .destructive) {
-                                            if let index = recentWorkouts.firstIndex(where: { $0.date == workout.date }) {
+                                            if let index = recentWorkouts.firstIndex(where: { $0.workoutID == workout.workoutID }) {
                                                 deleteWorkouts(at: IndexSet(integer: index))
                                             }
                                         } label: {
                                             Label("Delete", systemImage: "trash")
                                         }
+                                    }
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            editWorkout = EditWorkoutInfo(date: workout.date, workoutType: workout.workoutType, workoutID: workout.workoutID)
+                                        } label: {
+                                            Label("Edit", systemImage: "pencil")
+                                        }
+                                        .tint(AppColors.accent)
                                     }
                                 }
                             } header: {
@@ -373,8 +416,15 @@ struct WorkoutView: View {
                     exercisesForType: { exercises(for: $0) },
                     onSelect: { type in
                         showingCategoryPicker = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            activeType = type
+                        if !hasRequestedNotifications {
+                            pendingWorkoutType = type
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showingNotificationPrompt = true
+                            }
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                activeType = type
+                            }
                         }
                     },
                     onAddCustom: { type, newExercises in
@@ -404,9 +454,53 @@ struct WorkoutView: View {
                     workoutType: info.workoutType,
                     exercises: exercises(for: info.workoutType),
                     restDuration: $restDuration,
-                    editDate: info.date
+                    editDate: info.date,
+                    editWorkoutID: info.workoutID
                 )
                 .background(Color(.systemBackground))
+            }
+            .fullScreenCover(item: $detailWorkout) { detail in
+                WorkoutJourneyView(
+                    workoutType: detail.workoutType,
+                    journeyData: detail.journeyData,
+                    duration: detail.duration,
+                    restRecords: [:],
+                    workoutDate: detail.date,
+                    onEdit: {
+                        detailWorkout = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            editWorkout = EditWorkoutInfo(date: detail.date, workoutType: detail.workoutType, workoutID: detail.id)
+                        }
+                    },
+                    onDone: { detailWorkout = nil }
+                )
+                .background(Color(.systemBackground))
+            }
+            .overlay {
+                if showingNotificationPrompt {
+                    NotificationPromptOverlay(
+                        restDuration: restDuration,
+                        onAllow: {
+                            showingNotificationPrompt = false
+                            hasRequestedNotifications = true
+                            Task {
+                                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+                                if let type = pendingWorkoutType {
+                                    activeType = type
+                                    pendingWorkoutType = nil
+                                }
+                            }
+                        },
+                        onSkip: {
+                            showingNotificationPrompt = false
+                            hasRequestedNotifications = true
+                            if let type = pendingWorkoutType {
+                                activeType = type
+                                pendingWorkoutType = nil
+                            }
+                        }
+                    )
+                }
             }
             .sheet(isPresented: $showingSettings) {
                 WorkoutSettingsSheet(
@@ -424,66 +518,6 @@ struct WorkoutView: View {
         }
     }
 
-    // MARK: - History Exercise Details
-
-    @ViewBuilder
-    private func exerciseDetailsView(for date: Date) -> some View {
-        let sets = allSets.filter { $0.date == date }
-        let grouped = Dictionary(grouping: sets) { $0.exerciseName }
-        let sortedNames = grouped.keys.sorted()
-
-        VStack(spacing: 6) {
-            ForEach(sortedNames, id: \.self) { name in
-                let exerciseSets = grouped[name]!.sorted { $0.setNumber < $1.setNumber }
-                let consolidated = consolidateSets(exerciseSets)
-
-                HStack(spacing: 0) {
-                    Text(name)
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    VStack(alignment: .trailing, spacing: 2) {
-                        ForEach(Array(consolidated.enumerated()), id: \.offset) { _, entry in
-                            Text(entry)
-                                .font(.caption.weight(.medium).monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.vertical, 6)
-
-                if name != sortedNames.last {
-                    Divider()
-                }
-            }
-        }
-    }
-
-    private func consolidateSets(_ sets: [WorkoutSet]) -> [String] {
-        struct SetKey: Hashable {
-            let weight: Double
-            let reps: Int
-        }
-
-        var result: [String] = []
-        var i = 0
-        while i < sets.count {
-            let current = SetKey(weight: sets[i].weight, reps: sets[i].reps)
-            var count = 1
-            while i + count < sets.count &&
-                  SetKey(weight: sets[i + count].weight, reps: sets[i + count].reps) == current {
-                count += 1
-            }
-            let w = formatWeight(current.weight)
-            if count > 1 {
-                result.append("\(count) × \(w) lbs × \(current.reps)")
-            } else {
-                result.append("\(w) lbs × \(current.reps)")
-            }
-            i += count
-        }
-        return result
-    }
 }
 
 // MARK: - Category Picker Sheet
@@ -844,11 +878,22 @@ struct CreateCustomWorkoutSheet: View {
                 .disabled(!hasValidExercises)
             }
         }
-        .confirmationDialog("Done editing?", isPresented: $showingSaveConfirm) {
-            Button("Save Workout") { saveWorkout() }
-            Button("Keep Editing", role: .cancel) { }
-        } message: {
-            Text("You can always edit this workout later from settings.")
+        .overlay {
+            if showingSaveConfirm {
+                WorkoutConfirmOverlay(
+                    title: "Done editing?",
+                    message: "You can always edit this workout later from settings.",
+                    buttons: [
+                        .init(label: "Save Workout", style: .primary) {
+                            showingSaveConfirm = false
+                            saveWorkout()
+                        },
+                        .init(label: "Keep Editing", style: .cancel) {
+                            showingSaveConfirm = false
+                        },
+                    ]
+                )
+            }
         }
     }
 
@@ -1000,7 +1045,7 @@ struct CreateCustomWorkoutSheet: View {
 
     private func deleteDraft(at index: Int) {
         guard draftExercises.count > 1 else { return }
-        withAnimation { draftExercises.remove(at: index) }
+        _ = withAnimation { draftExercises.remove(at: index) }
     }
 
     private func saveWorkout() {
@@ -1389,6 +1434,7 @@ struct ActiveWorkoutView: View {
     let workoutType: WorkoutType
     @Binding var restDuration: Int
     var editDate: Date?
+    var editWorkoutID: String?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -1409,13 +1455,17 @@ struct ActiveWorkoutView: View {
     @State private var elapsedSeconds: Int = 0
     @State private var sessionTimerTask: Task<Void, Never>?
     @State private var currentActivity: Activity<RestTimerAttributes>?
+    @State private var restRecords: [Int: Int] = [:]
+    @State private var restStartedAfterOrder: Int = -1
+    @State private var restStartTime: Date?
 
     private var isEditMode: Bool { editDate != nil }
 
-    init(workoutType: WorkoutType, exercises: [ExerciseInfo], restDuration: Binding<Int>, editDate: Date? = nil) {
+    init(workoutType: WorkoutType, exercises: [ExerciseInfo], restDuration: Binding<Int>, editDate: Date? = nil, editWorkoutID: String? = nil) {
         self.workoutType = workoutType
         self._restDuration = restDuration
         self.editDate = editDate
+        self.editWorkoutID = editWorkoutID
         self._activeExercises = State(initialValue: exercises)
         self._isPreviewMode = State(initialValue: editDate == nil)
     }
@@ -1451,7 +1501,7 @@ struct ActiveWorkoutView: View {
                 workoutType: workoutType,
                 journeyData: journeyData,
                 duration: elapsedSeconds,
-                restDuration: restDuration,
+                restRecords: restRecords,
                 onDone: { dismiss() }
             )
         } else {
@@ -1500,6 +1550,7 @@ struct ActiveWorkoutView: View {
                             showingDiscardConfirm = true
                         } else {
                             stopTimer()
+                            endLiveActivity()
                             dismiss()
                         }
                     }
@@ -1528,20 +1579,43 @@ struct ActiveWorkoutView: View {
                     }
                 }
             }
-            .confirmationDialog("Discard workout?", isPresented: $showingDiscardConfirm) {
-                Button("Discard", role: .destructive) { stopTimer(); endLiveActivity(); dismiss() }
-                Button("Save & Finish") { stopTimer(); endLiveActivity(); saveAndDismiss() }
-                Button("Cancel", role: .cancel) { }
-            }
-            .confirmationDialog("Finish workout?", isPresented: $showingFinishConfirm) {
-                Button("Finish") {
-                    stopTimer()
-                    endLiveActivity()
-                    saveWorkout()
-                    journeyData = captureJourneyData()
-                    showJourneySummary = true
+            .overlay {
+                if showingDiscardConfirm {
+                    WorkoutConfirmOverlay(
+                        title: "Discard workout?",
+                        buttons: [
+                            .init(label: "Save & Finish", style: .primary) {
+                                showingDiscardConfirm = false
+                                stopTimer(); endLiveActivity(); saveAndDismiss()
+                            },
+                            .init(label: "Discard", style: .destructive) {
+                                showingDiscardConfirm = false
+                                stopTimer(); endLiveActivity(); dismiss()
+                            },
+                            .init(label: "Cancel", style: .cancel) {
+                                showingDiscardConfirm = false
+                            },
+                        ]
+                    )
                 }
-                Button("Cancel", role: .cancel) { }
+                if showingFinishConfirm {
+                    WorkoutConfirmOverlay(
+                        title: "Finish workout?",
+                        buttons: [
+                            .init(label: "Finish", style: .primary) {
+                                showingFinishConfirm = false
+                                stopTimer()
+                                endLiveActivity()
+                                saveWorkout()
+                                journeyData = captureJourneyData()
+                                showJourneySummary = true
+                            },
+                            .init(label: "Cancel", style: .cancel) {
+                                showingFinishConfirm = false
+                            },
+                        ]
+                    )
+                }
             }
             .onAppear {
                 prepopulate()
@@ -1894,7 +1968,12 @@ struct ActiveWorkoutView: View {
 
     private func prepopulate() {
         if let editDate {
-            let daySets = allSets.filter { $0.date == editDate }
+            let daySets: [WorkoutSet]
+            if let editWorkoutID, !editWorkoutID.isEmpty {
+                daySets = allSets.filter { $0.workoutID == editWorkoutID }
+            } else {
+                daySets = allSets.filter { $0.date == editDate }
+            }
             let grouped = Dictionary(grouping: daySets) { $0.exerciseName }
             for exercise in activeExercises {
                 if let sets = grouped[exercise.name]?.sorted(by: { $0.setNumber < $1.setNumber }), !sets.isEmpty {
@@ -1927,10 +2006,14 @@ struct ActiveWorkoutView: View {
 
     private func previousSets(for exerciseName: String) -> [WorkoutSet] {
         let pastSets = allSets.filter { $0.exerciseName == exerciseName && $0.date < Date() }
-        guard let lastDate = pastSets.first?.date else { return [] }
-        return pastSets
-            .filter { $0.date == lastDate }
-            .sorted { $0.setNumber < $1.setNumber }
+        guard let lastSet = pastSets.first else { return [] }
+        let matching: [WorkoutSet]
+        if !lastSet.workoutID.isEmpty {
+            matching = pastSets.filter { $0.workoutID == lastSet.workoutID }
+        } else {
+            matching = pastSets.filter { $0.date == lastSet.date }
+        }
+        return matching.sorted { $0.setNumber < $1.setNumber }
     }
 
     private func markSetDone(exercise: String, index: Int) {
@@ -1983,7 +2066,10 @@ struct ActiveWorkoutView: View {
         stopTimer()
         timerRemaining = restDuration
         timerActive = true
+        restStartTime = Date.now
+        restStartedAfterOrder = max(0, nextCompletionOrder - 1)
         startLiveActivity()
+        scheduleRestNotification()
         timerTask = Task {
             while timerRemaining > 0 && !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
@@ -1992,6 +2078,10 @@ struct ActiveWorkoutView: View {
                 }
             }
             if !Task.isCancelled {
+                if let start = restStartTime {
+                    restRecords[restStartedAfterOrder] = Int(Date.now.timeIntervalSince(start))
+                    restStartTime = nil
+                }
                 endLiveActivity()
                 timerActive = false
             }
@@ -1999,7 +2089,12 @@ struct ActiveWorkoutView: View {
     }
 
     private func skipTimer() {
+        if let start = restStartTime {
+            restRecords[restStartedAfterOrder] = Int(Date.now.timeIntervalSince(start))
+            restStartTime = nil
+        }
         stopTimer()
+        cancelRestNotification()
         endLiveActivity()
         withAnimation {
             timerRemaining = 0
@@ -2010,6 +2105,7 @@ struct ActiveWorkoutView: View {
     private func stopTimer() {
         timerTask?.cancel()
         timerTask = nil
+        cancelRestNotification()
     }
 
     private func startSessionTimer() {
@@ -2021,6 +2117,22 @@ struct ActiveWorkoutView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Rest Notification
+
+    private func scheduleRestNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Rest Complete"
+        content.body = "Time for your next set!"
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(restDuration), repeats: false)
+        let request = UNNotificationRequest(identifier: "restTimer", content: content, trigger: trigger)
+        Task { try? await UNUserNotificationCenter.current().add(request) }
+    }
+
+    private func cancelRestNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["restTimer"])
     }
 
     // MARK: - Live Activity
@@ -2084,17 +2196,17 @@ struct ActiveWorkoutView: View {
         }
 
         var orderedSets: [OrderedSet] = []
-        for (exerciseIdx, exercise) in activeExercises.enumerated() {
+        for exercise in activeExercises {
             let sets = sessionSets[exercise.name] ?? []
             for (setIdx, entry) in sets.enumerated() {
-                guard !entry.weight.isEmpty && !entry.reps.isEmpty else { continue }
-                let order = entry.completionOrder >= 0 ? entry.completionOrder : (10000 + exerciseIdx * 100 + setIdx)
+                guard entry.completed, !entry.weight.isEmpty, !entry.reps.isEmpty,
+                      entry.completionOrder >= 0 else { continue }
                 orderedSets.append(OrderedSet(
                     exerciseName: exercise.name,
                     weight: entry.weight,
                     reps: entry.reps,
                     setNumber: setIdx + 1,
-                    order: order
+                    order: entry.completionOrder
                 ))
             }
         }
@@ -2113,7 +2225,7 @@ struct ActiveWorkoutView: View {
                 currentName = set.exerciseName
                 currentSets = []
             }
-            currentSets.append(JourneySetInfo(weight: set.weight, reps: set.reps, setNumber: set.setNumber))
+            currentSets.append(JourneySetInfo(weight: set.weight, reps: set.reps, setNumber: set.setNumber, completionOrder: set.order))
         }
         if !currentSets.isEmpty {
             blocks.append(JourneyBlock(exerciseName: currentName, sets: currentSets))
@@ -2126,57 +2238,82 @@ struct ActiveWorkoutView: View {
         sessionTimerTask?.cancel()
 
         let saveDate = Date()
+        let workoutID = UUID().uuidString
         for exercise in activeExercises {
             let sets = sessionSets[exercise.name] ?? []
             for (index, entry) in sets.enumerated() {
-                guard let weight = Double(entry.weight), let reps = Int(entry.reps),
+                guard entry.completed,
+                      let weight = Double(entry.weight), let reps = Int(entry.reps),
                       weight > 0, reps > 0 else { continue }
                 let workoutSet = WorkoutSet(
                     exerciseName: exercise.name,
                     weight: weight,
                     reps: reps,
                     setNumber: index,
-                    date: saveDate
+                    date: saveDate,
+                    workoutID: workoutID
                 )
                 modelContext.insert(workoutSet)
             }
         }
 
-        let gymEntry = GymEntry(date: saveDate, duration: elapsedSeconds)
+        let gymEntry = GymEntry(date: saveDate, duration: elapsedSeconds, workoutID: workoutID)
         modelContext.insert(gymEntry)
         try? modelContext.save()
     }
 
     private func saveAndDismiss() {
         sessionTimerTask?.cancel()
+        endLiveActivity()
 
         if let editDate {
-            let oldSets = allSets.filter { $0.date == editDate }
+            let oldSets: [WorkoutSet]
+            if let editWorkoutID, !editWorkoutID.isEmpty {
+                oldSets = allSets.filter { $0.workoutID == editWorkoutID }
+            } else {
+                oldSets = allSets.filter { $0.date == editDate }
+            }
             for old in oldSets {
                 modelContext.delete(old)
             }
         }
 
         let saveDate = editDate ?? Date()
+        let workoutID = editWorkoutID ?? UUID().uuidString
+        var savedAnySet = false
         for exercise in activeExercises {
             let sets = sessionSets[exercise.name] ?? []
             for (index, entry) in sets.enumerated() {
-                guard let weight = Double(entry.weight), let reps = Int(entry.reps),
+                guard entry.completed,
+                      let weight = Double(entry.weight), let reps = Int(entry.reps),
                       weight > 0, reps > 0 else { continue }
                 let workoutSet = WorkoutSet(
                     exerciseName: exercise.name,
                     weight: weight,
                     reps: reps,
                     setNumber: index,
-                    date: saveDate
+                    date: saveDate,
+                    workoutID: workoutID
                 )
                 modelContext.insert(workoutSet)
+                savedAnySet = true
             }
         }
 
         if !isEditMode {
-            let gymEntry = GymEntry(date: saveDate, duration: elapsedSeconds)
+            let gymEntry = GymEntry(date: saveDate, duration: elapsedSeconds, workoutID: workoutID)
             modelContext.insert(gymEntry)
+        } else if !savedAnySet, let editDate {
+            let descriptor = FetchDescriptor<GymEntry>()
+            if let entries = try? modelContext.fetch(descriptor) {
+                for entry in entries {
+                    if let editWorkoutID, !editWorkoutID.isEmpty {
+                        if entry.workoutID == editWorkoutID { modelContext.delete(entry) }
+                    } else if entry.date == editDate {
+                        modelContext.delete(entry)
+                    }
+                }
+            }
         }
 
         try? modelContext.save()
@@ -2190,8 +2327,12 @@ struct WorkoutJourneyView: View {
     let workoutType: WorkoutType
     let journeyData: [JourneyBlock]
     let duration: Int
-    let restDuration: Int
+    let restRecords: [Int: Int]
+    var workoutDate: Date? = nil
+    var onEdit: (() -> Void)? = nil
     let onDone: () -> Void
+
+    private var isHistoryMode: Bool { workoutDate != nil }
 
     private var totalSets: Int {
         journeyData.reduce(0) { $0 + $1.sets.count }
@@ -2216,16 +2357,22 @@ struct WorkoutJourneyView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     VStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
+                        Image(systemName: isHistoryMode ? workoutType.icon : "checkmark.circle.fill")
                             .font(.system(size: 56))
-                            .foregroundStyle(AppColors.success)
+                            .foregroundStyle(isHistoryMode ? AppColors.accent : AppColors.success)
 
-                        Text("Workout Complete")
+                        Text(isHistoryMode ? workoutType.name : "Workout Complete")
                             .font(.title2.weight(.bold))
 
-                        Text(workoutType.name)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        if let workoutDate {
+                            Text(workoutDate.formatted(.dateTime.weekday(.wide).month(.abbreviated).day().hour().minute()))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(workoutType.name)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .padding(.top, 12)
                     .padding(.bottom, 24)
@@ -2289,19 +2436,21 @@ struct WorkoutJourneyView: View {
                                     .padding(.vertical, 8)
 
                                     if setIdx < block.sets.count - 1 {
-                                        HStack(spacing: 6) {
-                                            Rectangle()
-                                                .fill(Color(.separator).opacity(0.3))
-                                                .frame(height: 1)
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "timer")
-                                                Text(formatTimer(restDuration))
+                                        if let restDur = restRecords[set.completionOrder] {
+                                            HStack(spacing: 6) {
+                                                Rectangle()
+                                                    .fill(Color(.separator).opacity(0.3))
+                                                    .frame(height: 1)
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "timer")
+                                                    Text(formatTimer(restDur))
+                                                }
+                                                .font(.caption2)
+                                                .foregroundStyle(Color(.quaternaryLabel))
+                                                Rectangle()
+                                                    .fill(Color(.separator).opacity(0.3))
+                                                    .frame(height: 1)
                                             }
-                                            .font(.caption2)
-                                            .foregroundStyle(Color(.quaternaryLabel))
-                                            Rectangle()
-                                                .fill(Color(.separator).opacity(0.3))
-                                                .frame(height: 1)
                                         }
                                     }
                                 }
@@ -2310,11 +2459,13 @@ struct WorkoutJourneyView: View {
                             .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
                             .padding(.horizontal)
 
-                            if blockIdx < journeyData.count - 1 {
+                            if blockIdx < journeyData.count - 1,
+                               let lastOrder = block.sets.last?.completionOrder,
+                               let restDur = restRecords[lastOrder] {
                                 HStack(spacing: 8) {
                                     Image(systemName: "timer")
                                         .font(.caption)
-                                    Text("Rest \(formatTimer(restDuration))")
+                                    Text("Rest \(formatTimer(restDur))")
                                         .font(.caption)
                                 }
                                 .foregroundStyle(.tertiary)
@@ -2325,9 +2476,14 @@ struct WorkoutJourneyView: View {
                 }
                 .padding(.bottom, 20)
             }
-            .navigationTitle("Journey")
+            .navigationTitle(isHistoryMode ? "Summary" : "Journey")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if let onEdit {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Edit") { onEdit() }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { onDone() }
                         .fontWeight(.semibold)
@@ -2362,6 +2518,135 @@ struct WorkoutJourneyView: View {
         let m = (totalSeconds % 3600) / 60
         if h > 0 { return "\(h)h \(m)m" }
         return "\(m)m"
+    }
+}
+
+// MARK: - Confirm Overlay
+
+struct WorkoutConfirmButton {
+    enum Style { case primary, destructive, cancel }
+    let label: String
+    let style: Style
+    let action: () -> Void
+}
+
+struct WorkoutConfirmOverlay: View {
+    let title: String
+    var message: String? = nil
+    let buttons: [WorkoutConfirmButton]
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    buttons.first(where: { $0.style == .cancel })?.action()
+                }
+
+            VStack(spacing: 0) {
+                VStack(spacing: 6) {
+                    Text(title)
+                        .font(.headline)
+                    if let message {
+                        Text(message)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                .padding(.horizontal, 20)
+
+                Divider()
+
+                ForEach(Array(buttons.enumerated()), id: \.offset) { idx, button in
+                    Button {
+                        button.action()
+                    } label: {
+                        Text(button.label)
+                            .font(.body.weight(button.style == .cancel ? .regular : .semibold))
+                            .foregroundStyle(button.style == .destructive ? .red : (button.style == .primary ? AppColors.accent : .primary))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                    }
+
+                    if idx < buttons.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 48)
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+        }
+        .animation(.easeOut(duration: 0.15), value: true)
+    }
+}
+
+// MARK: - Notification Prompt
+
+struct NotificationPromptOverlay: View {
+    let restDuration: Int
+    let onAllow: () -> Void
+    let onSkip: () -> Void
+
+    private var formattedDuration: String {
+        let m = restDuration / 60
+        let s = restDuration % 60
+        if s == 0 { return "\(m) minute\(m == 1 ? "" : "s")" }
+        return "\(m)m \(s)s"
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppColors.accent)
+                    .padding(.top, 8)
+
+                VStack(spacing: 8) {
+                    Text("Stay on Track")
+                        .font(.title3.weight(.bold))
+                    Text("We'll notify you when your \(formattedDuration) rest between sets is over so you can focus on your workout.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(spacing: 10) {
+                    Button {
+                        onAllow()
+                    } label: {
+                        Text("Enable Notifications")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        onSkip()
+                    } label: {
+                        Text("Not Now")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .padding(.horizontal, 40)
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+        }
+        .animation(.easeOut(duration: 0.2), value: true)
     }
 }
 

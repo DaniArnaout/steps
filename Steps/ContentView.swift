@@ -77,6 +77,7 @@ struct ContentView: View {
     @State private var showingContact = false
     @State private var selectedDate: Date = Date()
     @State private var lastActiveDate: Date = Date()
+    @AppStorage("stepsEnabled") private var stepsEnabled = false
 
     private var isToday: Bool {
         Calendar.current.isDateInToday(selectedDate)
@@ -135,6 +136,15 @@ struct ContentView: View {
 
     // MARK: - Steps data
 
+    private var displayWeek: [DaySteps] {
+        if !stepCounter.pastWeek.isEmpty { return stepCounter.pastWeek }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return (0..<7).compactMap { offset in
+            calendar.date(byAdding: .day, value: -(6 - offset), to: today).map { DaySteps(date: $0, steps: 0) }
+        }
+    }
+
     private var selectedDaySteps: Int {
         if isToday { return stepCounter.todaySteps }
         let calendar = Calendar.current
@@ -187,7 +197,7 @@ struct ContentView: View {
 
     private var currentStreak: Int {
         var streak = 0
-        for day in stepCounter.pastWeek.reversed() {
+        for day in displayWeek.reversed() {
             if daySuccess(for: day) { streak += 1 } else { break }
         }
         return streak
@@ -244,6 +254,9 @@ struct ContentView: View {
         .tint(AppColors.accent)
         .task {
             await stepCounter.requestAuthorization()
+            if stepCounter.todaySteps > 0 || stepCounter.pastWeek.contains(where: { $0.steps > 0 }) {
+                stepsEnabled = true
+            }
         }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
@@ -252,7 +265,12 @@ struct ContentView: View {
                     selectedDate = Date()
                     lastActiveDate = Date()
                 }
-                Task { await stepCounter.refresh() }
+                Task {
+                    await stepCounter.refresh()
+                    if !stepsEnabled && (stepCounter.todaySteps > 0 || stepCounter.pastWeek.contains(where: { $0.steps > 0 })) {
+                        stepsEnabled = true
+                    }
+                }
                 syncCaloriesToWidget()
             }
         }
@@ -336,7 +354,7 @@ struct ContentView: View {
 
     private var weekCard: some View {
         HStack(spacing: 0) {
-            ForEach(stepCounter.pastWeek) { day in
+            ForEach(displayWeek) { day in
                 let isSelected = Calendar.current.isDate(day.date, inSameDayAs: selectedDate)
                 let progress = dayProgress(for: day)
                 let success = progress >= 1.0
@@ -406,29 +424,53 @@ struct ContentView: View {
             }
 
             HStack(spacing: 28) {
-                VStack(spacing: 4) {
-                    ZStack {
-                        Circle()
-                            .stroke(.quaternary, lineWidth: 14)
-                        Circle()
-                            .trim(from: 0, to: selectedStepProgress)
-                            .stroke(stepProgressColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                            .animation(.easeInOut, value: selectedStepProgress)
+                if stepsEnabled {
+                    VStack(spacing: 4) {
+                        ZStack {
+                            Circle()
+                                .stroke(.quaternary, lineWidth: 14)
+                            Circle()
+                                .trim(from: 0, to: selectedStepProgress)
+                                .stroke(stepProgressColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .animation(.easeInOut, value: selectedStepProgress)
 
-                        VStack(spacing: 2) {
-                            Image(systemName: "figure.walk")
-                                .font(.system(size: 18))
-                                .foregroundStyle(stepProgressColor)
-                            Text("\(selectedDaySteps)")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .contentTransition(.numericText())
-                            Text("steps")
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
+                            VStack(spacing: 2) {
+                                Image(systemName: "figure.walk")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(stepProgressColor)
+                                Text("\(selectedDaySteps)")
+                                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    .contentTransition(.numericText())
+                                Text("steps")
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .frame(width: 148, height: 148)
                     }
-                    .frame(width: 148, height: 148)
+                } else {
+                    Button {
+                        if let url = URL(string: "x-apple-health://") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .stroke(.quaternary, lineWidth: 14)
+                            VStack(spacing: 6) {
+                                Image(systemName: "figure.walk")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(AppColors.accent)
+                                Text("Enable Steps")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .underline()
+                                    .foregroundStyle(AppColors.accent)
+                            }
+                        }
+                        .frame(width: 148, height: 148)
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 VStack(spacing: 8) {
