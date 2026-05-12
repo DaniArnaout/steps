@@ -53,6 +53,15 @@ final class GoalStore {
     }
 }
 
+struct Line: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { p in
+            p.move(to: CGPoint(x: rect.minX, y: rect.midY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        }
+    }
+}
+
 struct LazyView<Content: View>: View {
     let build: () -> Content
     init(@ViewBuilder _ build: @escaping () -> Content) { self.build = build }
@@ -326,6 +335,7 @@ struct ContentView: View {
             .sheet(isPresented: $showingWeightLog) {
                 LogWeightSheet(existingEntry: selectedDateWeightEntry, date: selectedDate)
                     .tint(Color(.label))
+                    .presentationDetents([.height(220)])
             }
         }
     }
@@ -668,15 +678,79 @@ struct LogWeightSheet: View {
 
     @State private var weightText = ""
     @State private var bodyFatText = ""
+    @FocusState private var focusedField: WeightField?
+
+    enum WeightField { case weight, bodyFat }
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("Weight (lbs)", text: $weightText)
-                    .keyboardType(.decimalPad)
-                TextField("Body fat % (optional)", text: $bodyFatText)
-                    .keyboardType(.decimalPad)
+            VStack(spacing: 16) {
+                HStack(spacing: 12) {
+                    VStack(spacing: 10) {
+                        Text("\u{2696}\u{fe0f}")
+                            .font(.system(size: 28))
+                        Text("Weight (lbs)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        TextField("0", text: $weightText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .font(.title2.weight(.bold))
+                            .focused($focusedField, equals: .weight)
+                            .onChange(of: weightText) {
+                                if let val = Double(weightText), val > 999 {
+                                    weightText = "999"
+                                }
+                            }
+                            .overlay(alignment: .bottom) {
+                                Line()
+                                    .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                                    .foregroundStyle(Color(.tertiaryLabel))
+                                    .frame(height: 1)
+                                    .padding(.horizontal, 16)
+                                    .offset(y: 4)
+                            }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
+                    .onTapGesture { focusedField = .weight }
+
+                    VStack(spacing: 10) {
+                        Text("\u{1f4ca}")
+                            .font(.system(size: 28))
+                        Text("Body Fat (%)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        TextField("—", text: $bodyFatText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .font(.title2.weight(.bold))
+                            .focused($focusedField, equals: .bodyFat)
+                            .onChange(of: bodyFatText) {
+                                if let val = Double(bodyFatText), val > 99.9 {
+                                    bodyFatText = "99.9"
+                                }
+                            }
+                            .overlay(alignment: .bottom) {
+                                Line()
+                                    .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                                    .foregroundStyle(Color(.tertiaryLabel))
+                                    .frame(height: 1)
+                                    .padding(.horizontal, 16)
+                                    .offset(y: 4)
+                            }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
+                    .onTapGesture { focusedField = .bodyFat }
+                }
+                .padding(.horizontal)
+
+                Spacer()
             }
+            .padding(.top, 8)
             .navigationTitle("Log Weight")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -695,13 +769,16 @@ struct LogWeightSheet: View {
                         bodyFatText = String(format: "%.1f", e.bodyFat)
                     }
                 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    focusedField = .weight
+                }
             }
         }
     }
 
     private func save() {
-        guard let weight = Double(weightText) else { return }
-        let bodyFat = Double(bodyFatText) ?? 0
+        guard let weight = Double(weightText), weight <= 999 else { return }
+        let bodyFat = min(Double(bodyFatText) ?? 0, 99.9)
 
         if let existing = existingEntry {
             existing.weight = weight
@@ -773,10 +850,19 @@ struct EditFoodEntrySheet: View {
         NavigationStack {
             Form {
                 TextField("Meal name", text: $name)
+                    .onChange(of: name) {
+                        if name.count > 50 { name = String(name.prefix(50)) }
+                    }
                 TextField("Calories", text: $caloriesText)
                     .keyboardType(.numberPad)
+                    .onChange(of: caloriesText) {
+                        if let val = Int(caloriesText), val > 10000 { caloriesText = "10000" }
+                    }
                 TextField("Protein (g)", text: $proteinText)
                     .keyboardType(.numberPad)
+                    .onChange(of: proteinText) {
+                        if let val = Int(proteinText), val > 999 { proteinText = "999" }
+                    }
                 Picker("Meal", selection: $category) {
                     ForEach(MealCategory.allCases, id: \.self) { cat in
                         Label(cat.rawValue, systemImage: cat.icon).tag(cat)
@@ -791,9 +877,9 @@ struct EditFoodEntrySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        entry.name = name
-                        entry.calories = Int(caloriesText) ?? entry.calories
-                        entry.protein = Int(proteinText) ?? 0
+                        entry.name = String(name.prefix(50))
+                        entry.calories = min(Int(caloriesText) ?? entry.calories, 10000)
+                        entry.protein = min(Int(proteinText) ?? 0, 999)
                         entry.category = category
                         dismiss()
                     }
@@ -889,10 +975,10 @@ struct GoalsSettingsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        if let s = Int(stepsText), s > 0 { goalStore.stepGoal = s }
-                        if let c = Int(caloriesText), c > 0 { goalStore.calorieGoal = c }
-                        if let p = Int(proteinText), p > 0 { goalStore.proteinGoal = p }
-                        if let g = Int(gymText), g > 0 { goalStore.gymGoal = g }
+                        if let s = Int(stepsText), s > 0 { goalStore.stepGoal = min(s, 200000) }
+                        if let c = Int(caloriesText), c > 0 { goalStore.calorieGoal = min(c, 10000) }
+                        if let p = Int(proteinText), p > 0 { goalStore.proteinGoal = min(p, 999) }
+                        if let g = Int(gymText), g > 0 { goalStore.gymGoal = min(g, 7) }
                         goalStore.requireSteps = requireSteps
                         goalStore.requireCalories = requireCalories
                         goalStore.requireProtein = requireProtein
@@ -949,6 +1035,19 @@ struct GoalsSettingsSheet: View {
                     .multilineTextAlignment(.trailing)
                     .font(.body.weight(.medium))
                     .frame(width: 60)
+                    .onChange(of: value.wrappedValue) {
+                        if let val = Int(value.wrappedValue) {
+                            let limit: Int
+                            switch title {
+                            case "Steps": limit = 200000
+                            case "Calories": limit = 10000
+                            case "Protein": limit = 999
+                            case "Gym / week": limit = 7
+                            default: limit = 99999
+                            }
+                            if val > limit { value.wrappedValue = "\(limit)" }
+                        }
+                    }
                 if let unit {
                     Text(unit)
                         .font(.subheadline)

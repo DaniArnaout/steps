@@ -722,6 +722,9 @@ struct CreateCustomWorkoutSheet: View {
             Section {
                 TextField("Workout name", text: $name)
                     .focused($focusedField)
+                    .onChange(of: name) {
+                        if name.count > 50 { name = String(name.prefix(50)) }
+                    }
             }
 
             Section("Icon") {
@@ -907,6 +910,11 @@ struct CreateCustomWorkoutSheet: View {
             HStack {
                 TextField("Exercise name", text: $draftExercises[index].name)
                     .font(.title3.weight(.semibold))
+                    .onChange(of: draftExercises[index].name) {
+                        if draftExercises[index].name.count > 50 {
+                            draftExercises[index].name = String(draftExercises[index].name.prefix(50))
+                        }
+                    }
                 Spacer()
 
                 HStack(spacing: 12) {
@@ -969,6 +977,11 @@ struct CreateCustomWorkoutSheet: View {
                             .frame(height: 54)
                             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator).opacity(0.2), lineWidth: 1))
+                            .onChange(of: draftExercises[index].sets[setIdx].weight) {
+                                if let val = Double(draftExercises[index].sets[setIdx].weight), val > 999 {
+                                    draftExercises[index].sets[setIdx].weight = "999"
+                                }
+                            }
 
                         Text("×")
                             .font(.subheadline)
@@ -983,6 +996,11 @@ struct CreateCustomWorkoutSheet: View {
                             .frame(height: 54)
                             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator).opacity(0.2), lineWidth: 1))
+                            .onChange(of: draftExercises[index].sets[setIdx].reps) {
+                                if let val = Int(draftExercises[index].sets[setIdx].reps), val > 999 {
+                                    draftExercises[index].sets[setIdx].reps = "999"
+                                }
+                            }
                     }
                 }
             }
@@ -1136,10 +1154,19 @@ struct AddExerciseSheet: View {
             Form {
                 TextField("Exercise name", text: $name)
                     .focused($focused)
+                    .onChange(of: name) {
+                        if name.count > 50 { name = String(name.prefix(50)) }
+                    }
                 TextField("Starting weight (lbs)", text: $weightText)
                     .keyboardType(.decimalPad)
+                    .onChange(of: weightText) {
+                        if let val = Double(weightText), val > 999 { weightText = "999" }
+                    }
                 TextField("Starting reps", text: $repsText)
                     .keyboardType(.numberPad)
+                    .onChange(of: repsText) {
+                        if let val = Int(repsText), val > 999 { repsText = "999" }
+                    }
             }
             .navigationTitle("Add Exercise")
             .navigationBarTitleDisplayMode(.inline)
@@ -1196,6 +1223,9 @@ struct AddWorkoutTypeSheet: View {
             Form {
                 TextField("Workout name", text: $name)
                     .focused($focused)
+                    .onChange(of: name) {
+                        if name.count > 50 { name = String(name.prefix(50)) }
+                    }
 
                 Section("Icon") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 16) {
@@ -1958,7 +1988,13 @@ struct ActiveWorkoutView: View {
             get: { sessionSets[exercise]?[safe: index]?[keyPath: keyPath] ?? "" },
             set: { newValue in
                 if sessionSets[exercise] != nil && index < sessionSets[exercise]!.count {
-                    sessionSets[exercise]![index][keyPath: keyPath] = newValue
+                    var clamped = newValue
+                    if keyPath == \.weight {
+                        if let val = Double(newValue), val > 999 { clamped = "999" }
+                    } else if keyPath == \.reps {
+                        if let val = Int(newValue), val > 999 { clamped = "999" }
+                    }
+                    sessionSets[exercise]![index][keyPath: keyPath] = clamped
                 }
             }
         )

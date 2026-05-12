@@ -393,12 +393,21 @@ struct AddFoodSheet: View {
         Form {
             TextField("Meal name", text: $name)
                 .focused($focusedField, equals: .name)
+                .onChange(of: name) {
+                    if name.count > 50 { name = String(name.prefix(50)) }
+                }
             TextField("Calories", text: $caloriesText)
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .calories)
+                .onChange(of: caloriesText) {
+                    if let val = Int(caloriesText), val > 10000 { caloriesText = "10000" }
+                }
             TextField("Protein (g)", text: $proteinText)
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .protein)
+                .onChange(of: proteinText) {
+                    if let val = Int(proteinText), val > 999 { proteinText = "999" }
+                }
             Picker("Meal", selection: $category) {
                 ForEach(MealCategory.allCases, id: \.self) { cat in
                     Label(cat.rawValue, systemImage: cat.icon)
@@ -430,8 +439,10 @@ struct AddFoodSheet: View {
 
     private func save() {
         guard let calories = Int(caloriesText), !name.isEmpty else { return }
-        let protein = Int(proteinText) ?? 0
-        let entry = FoodEntry(name: name, calories: calories, protein: protein, date: date, category: category)
+        let clampedCalories = min(calories, 10000)
+        let protein = min(Int(proteinText) ?? 0, 999)
+        let clampedName = String(name.prefix(50))
+        let entry = FoodEntry(name: clampedName, calories: clampedCalories, protein: protein, date: date, category: category)
         modelContext.insert(entry)
         dismiss()
     }
@@ -545,11 +556,23 @@ struct EditPresetSheet: View {
         NavigationStack {
             Form {
                 TextField("Name", text: $name)
+                    .onChange(of: name) {
+                        if name.count > 50 { name = String(name.prefix(50)) }
+                    }
                 TextField("Calories", text: $caloriesText)
                     .keyboardType(.numberPad)
+                    .onChange(of: caloriesText) {
+                        if let val = Int(caloriesText), val > 10000 { caloriesText = "10000" }
+                    }
                 TextField("Protein (g)", text: $proteinText)
                     .keyboardType(.numberPad)
+                    .onChange(of: proteinText) {
+                        if let val = Int(proteinText), val > 999 { proteinText = "999" }
+                    }
                 TextField("Serving size (e.g. 1 cup)", text: $servingSize)
+                    .onChange(of: servingSize) {
+                        if servingSize.count > 30 { servingSize = String(servingSize.prefix(30)) }
+                    }
                 Button {
                     showingSymbolPicker = true
                 } label: {
@@ -598,18 +621,20 @@ struct EditPresetSheet: View {
     }
 
     private func savePreset() {
-        let cal = Int(caloriesText) ?? 0
-        let prot = Int(proteinText) ?? 0
+        let cal = min(Int(caloriesText) ?? 0, 10000)
+        let prot = min(Int(proteinText) ?? 0, 999)
+        let clampedName = String(name.prefix(50))
+        let clampedServing = String(servingSize.prefix(30))
         if let existing = preset {
-            existing.name = name
+            existing.name = clampedName
             existing.calories = cal
             existing.protein = prot
             existing.icon = icon
             existing.category = category
-            existing.servingSize = servingSize
+            existing.servingSize = clampedServing
             store.update(existing)
         } else {
-            let new = FoodPreset(name: name, calories: cal, protein: prot, icon: icon, category: category, servingSize: servingSize)
+            let new = FoodPreset(name: clampedName, calories: cal, protein: prot, icon: icon, category: category, servingSize: clampedServing)
             store.add(new)
         }
         dismiss()
