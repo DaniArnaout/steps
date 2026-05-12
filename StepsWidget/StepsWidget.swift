@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import HealthKit
+import ActivityKit
 
 private let appGroupID = "group.com.daniarnaout.SpotMe"
 private let accentGreen = Color(red: 0.20, green: 0.68, blue: 0.50)
@@ -217,6 +218,85 @@ struct SpotMeWidget: Widget {
         .configurationDisplayName("Spot Me")
         .description("Track your steps and calories at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+// MARK: - Live Activity
+
+struct RestTimerAttributes: ActivityAttributes {
+    struct ContentState: Codable, Hashable {
+        var endTime: Date
+        var totalDuration: Int
+    }
+    var workoutName: String
+}
+
+struct RestTimerLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: RestTimerAttributes.self) { context in
+            lockScreenView(context: context)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.center) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "dumbbell.fill")
+                            .foregroundStyle(accentGreen)
+                        Text("Spot Me")
+                            .font(.headline)
+                        Spacer()
+                        Text(timerInterval: Date.now...context.state.endTime, countsDown: true)
+                            .font(.title.weight(.bold).monospacedDigit())
+                            .frame(width: 90)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+            } compactLeading: {
+                HStack(spacing: 4) {
+                    Image(systemName: "dumbbell.fill")
+                        .foregroundStyle(accentGreen)
+                    Text("Spot Me")
+                        .font(.caption2.weight(.semibold))
+                }
+            } compactTrailing: {
+                Text(timerInterval: Date.now...context.state.endTime, countsDown: true)
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .frame(width: 44)
+                    .multilineTextAlignment(.trailing)
+            } minimal: {
+                Image(systemName: "dumbbell.fill")
+                    .foregroundStyle(accentGreen)
+            }
+        }
+    }
+
+    private func lockScreenView(context: ActivityViewContext<RestTimerAttributes>) -> some View {
+        HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(Color(.systemGray4), lineWidth: 4)
+                    .frame(width: 50, height: 50)
+                Image(systemName: "dumbbell.fill")
+                    .font(.title2)
+                    .foregroundStyle(accentGreen)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Spot Me")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(context.attributes.workoutName) · Rest")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(timerInterval: Date.now...context.state.endTime, countsDown: true)
+                .font(.title.weight(.bold).monospacedDigit())
+                .frame(width: 90)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding()
+        .activityBackgroundTint(.black.opacity(0.8))
     }
 }
 

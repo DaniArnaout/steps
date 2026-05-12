@@ -10,5 +10,7 @@
 	<string>Spot Me does not write health data, but HealthKit access is required to read your step count.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

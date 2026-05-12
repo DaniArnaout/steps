@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import ActivityKit
 
 struct WorkoutType: Identifiable, Hashable, Codable {
     var id: String { name }
@@ -26,6 +27,41 @@ struct EditWorkoutInfo: Identifiable {
     var id: Date { date }
 }
 
+// MARK: - Live Activity
+
+struct RestTimerAttributes: ActivityAttributes {
+    struct ContentState: Codable, Hashable {
+        var endTime: Date
+        var totalDuration: Int
+    }
+    var workoutName: String
+}
+
+// MARK: - Journey Data
+
+struct JourneySetInfo: Identifiable {
+    let id = UUID()
+    let weight: String
+    let reps: String
+    let setNumber: Int
+}
+
+struct JourneyBlock: Identifiable {
+    let id = UUID()
+    let exerciseName: String
+    let sets: [JourneySetInfo]
+}
+
+struct SetEntry: Identifiable {
+    let id = UUID()
+    var weight: String = ""
+    var reps: String = ""
+    var completed = false
+    var completionOrder: Int = -1
+}
+
+// MARK: - WorkoutView
+
 struct WorkoutView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutSet.date, order: .reverse) private var allSets: [WorkoutSet]
@@ -36,17 +72,19 @@ struct WorkoutView: View {
     @State private var showingCategoryPicker = false
     @State private var showingSettings = false
     @State private var showingContact = false
+    @State private var expandedWorkouts: Set<Date> = []
     @AppStorage("restTimerSeconds") private var restDuration: Int = 120
     @AppStorage("customExercisesJSON") private var customExercisesJSON: String = "[]"
     @AppStorage("customWorkoutTypesJSON") private var customWorkoutTypesJSON: String = "[]"
+    @AppStorage("hiddenBuiltInWorkoutsJSON") private var hiddenBuiltInWorkoutsJSON: String = "[]"
 
     static let builtInExercises: [ExerciseInfo] = [
         ExerciseInfo(name: "Bench Press", categoryName: "Upper Body", defaultWeight: 135, defaultReps: 10),
+        ExerciseInfo(name: "Row", categoryName: "Upper Body", defaultWeight: 100, defaultReps: 10),
         ExerciseInfo(name: "Shoulder Press", categoryName: "Upper Body", defaultWeight: 80, defaultReps: 10),
+        ExerciseInfo(name: "Lat Pulldown", categoryName: "Upper Body", defaultWeight: 120, defaultReps: 10),
         ExerciseInfo(name: "Bicep Curls", categoryName: "Upper Body", defaultWeight: 25, defaultReps: 12),
         ExerciseInfo(name: "Tricep Curls", categoryName: "Upper Body", defaultWeight: 25, defaultReps: 12),
-        ExerciseInfo(name: "Lat Pulldown", categoryName: "Upper Body", defaultWeight: 120, defaultReps: 10),
-        ExerciseInfo(name: "Row", categoryName: "Upper Body", defaultWeight: 100, defaultReps: 10),
         ExerciseInfo(name: "Leg Extension", categoryName: "Lower Body", defaultWeight: 90, defaultReps: 12),
         ExerciseInfo(name: "Leg Curl", categoryName: "Lower Body", defaultWeight: 80, defaultReps: 12),
         ExerciseInfo(name: "Glute Kickback", categoryName: "Lower Body", defaultWeight: 100, defaultReps: 12),
@@ -62,8 +100,13 @@ struct WorkoutView: View {
         (try? JSONDecoder().decode([WorkoutType].self, from: Data(customWorkoutTypesJSON.utf8))) ?? []
     }
 
+    var hiddenBuiltInWorkouts: [String] {
+        (try? JSONDecoder().decode([String].self, from: Data(hiddenBuiltInWorkoutsJSON.utf8))) ?? []
+    }
+
     var allWorkoutTypes: [WorkoutType] {
-        WorkoutType.builtIn + customWorkoutTypes
+        let visibleBuiltIn = WorkoutType.builtIn.filter { !hiddenBuiltInWorkouts.contains($0.name) }
+        return visibleBuiltIn + customWorkoutTypes
     }
 
     var allExercises: [ExerciseInfo] {
@@ -98,16 +141,26 @@ struct WorkoutView: View {
         }
     }
 
-    func removeCustomWorkoutType(_ name: String) {
-        var list = customWorkoutTypes
-        list.removeAll { $0.name == name }
-        if let data = try? JSONEncoder().encode(list) {
-            customWorkoutTypesJSON = String(data: data, encoding: .utf8) ?? "[]"
-        }
-        var exercises = customExercises
-        exercises.removeAll { $0.categoryName == name }
-        if let data = try? JSONEncoder().encode(exercises) {
-            customExercisesJSON = String(data: data, encoding: .utf8) ?? "[]"
+    func removeWorkoutType(_ name: String) {
+        if WorkoutType.builtIn.contains(where: { $0.name == name }) {
+            var hidden = hiddenBuiltInWorkouts
+            if !hidden.contains(name) {
+                hidden.append(name)
+            }
+            if let data = try? JSONEncoder().encode(hidden) {
+                hiddenBuiltInWorkoutsJSON = String(data: data, encoding: .utf8) ?? "[]"
+            }
+        } else {
+            var list = customWorkoutTypes
+            list.removeAll { $0.name == name }
+            if let data = try? JSONEncoder().encode(list) {
+                customWorkoutTypesJSON = String(data: data, encoding: .utf8) ?? "[]"
+            }
+            var exercises = customExercises
+            exercises.removeAll { $0.categoryName == name }
+            if let data = try? JSONEncoder().encode(exercises) {
+                customExercisesJSON = String(data: data, encoding: .utf8) ?? "[]"
+            }
         }
     }
 
@@ -172,9 +225,105 @@ struct WorkoutView: View {
         try? modelContext.save()
     }
 
+    private func formatWeight(_ weight: Double) -> String {
+        weight.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(weight))" : String(format: "%.1f", weight)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if recentWorkouts.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Workouts Yet", systemImage: "dumbbell.fill")
+                    } description: {
+                        Button {
+                            showingCategoryPicker = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Start a new workout")
+                            }
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(AppColors.accent)
+                        }
+                    }
+                } else {
+                    List {
+                        ForEach(groupedByDay, id: \.day) { group in
+                            Section {
+                                ForEach(group.workouts, id: \.date) { workout in
+                                    let isExpanded = expandedWorkouts.contains(workout.date)
+                                    VStack(spacing: 0) {
+                                        HStack(spacing: 12) {
+                                            Button {
+                                                editWorkout = EditWorkoutInfo(date: workout.date, workoutType: workout.workoutType)
+                                            } label: {
+                                                HStack(spacing: 12) {
+                                                    Image(systemName: workout.workoutType.icon)
+                                                        .font(.title3)
+                                                        .foregroundStyle(AppColors.accent)
+                                                        .frame(width: 32)
+                                                    Text(workout.workoutType.name)
+                                                        .font(.body.weight(.medium))
+                                                    Spacer()
+                                                    VStack(alignment: .trailing, spacing: 3) {
+                                                        Text("\(workout.exerciseCount) exercises")
+                                                            .font(.subheadline)
+                                                            .foregroundStyle(.secondary)
+                                                        if workout.duration > 0 {
+                                                            Text(formatDuration(workout.duration))
+                                                                .font(.caption)
+                                                                .foregroundStyle(.secondary)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            .buttonStyle(.plain)
+
+                                            Button {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    if isExpanded {
+                                                        expandedWorkouts.remove(workout.date)
+                                                    } else {
+                                                        expandedWorkouts.insert(workout.date)
+                                                    }
+                                                }
+                                            } label: {
+                                                Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle")
+                                                    .font(.title3)
+                                                    .foregroundStyle(isExpanded ? AppColors.accent : Color(.tertiaryLabel))
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+
+                                        if isExpanded {
+                                            Divider()
+                                                .padding(.top, 10)
+                                            exerciseDetailsView(for: workout.date)
+                                                .padding(.vertical, 10)
+                                        }
+                                    }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            if let index = recentWorkouts.firstIndex(where: { $0.date == workout.date }) {
+                                                deleteWorkouts(at: IndexSet(integer: index))
+                                            }
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                                }
+                            } header: {
+                                Text(smartDateLabel(group.day))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .textCase(nil)
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                }
+
                 Button {
                     showingCategoryPicker = true
                 } label: {
@@ -192,73 +341,8 @@ struct WorkoutView: View {
                     .foregroundStyle(.white)
                 }
                 .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-
-                if recentWorkouts.isEmpty {
-                    ContentUnavailableView(
-                        "No Workouts Yet",
-                        systemImage: "dumbbell.fill",
-                        description: Text("Start your first workout to track your progress")
-                    )
-                } else {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            ForEach(groupedByDay, id: \.day) { group in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(smartDateLabel(group.day))
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 4)
-
-                                    ForEach(group.workouts, id: \.date) { workout in
-                                        Button {
-                                            editWorkout = EditWorkoutInfo(date: workout.date, workoutType: workout.workoutType)
-                                        } label: {
-                                            HStack(spacing: 12) {
-                                                Image(systemName: workout.workoutType.icon)
-                                                    .font(.title3)
-                                                    .foregroundStyle(AppColors.accent)
-                                                    .frame(width: 32)
-                                                Text(workout.workoutType.name)
-                                                    .font(.body.weight(.medium))
-                                                Spacer()
-                                                VStack(alignment: .trailing, spacing: 3) {
-                                                    Text("\(workout.exerciseCount) exercises")
-                                                        .font(.subheadline)
-                                                        .foregroundStyle(.secondary)
-                                                    if workout.duration > 0 {
-                                                        Text(formatDuration(workout.duration))
-                                                            .font(.caption)
-                                                            .foregroundStyle(.secondary)
-                                                    }
-                                                }
-                                                Image(systemName: "chevron.right")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.tertiary)
-                                            }
-                                            .padding()
-                                            .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .contextMenu {
-                                            Button(role: .destructive) {
-                                                if let index = recentWorkouts.firstIndex(where: { $0.date == workout.date }) {
-                                                    deleteWorkouts(at: IndexSet(integer: index))
-                                                }
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.top, 4)
-                    }
-                }
-
+                .padding(.vertical, 12)
+                .background(.bar)
             }
             .navigationTitle("Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -293,8 +377,14 @@ struct WorkoutView: View {
                             activeType = type
                         }
                     },
-                    onAddCustom: { type in
+                    onAddCustom: { type, newExercises in
                         addCustomWorkoutType(type)
+                        for exercise in newExercises {
+                            addCustomExercise(exercise)
+                        }
+                    },
+                    onDelete: { type in
+                        removeWorkoutType(type.name)
                     }
                 )
                 .presentationDetents([.medium, .large])
@@ -327,11 +417,72 @@ struct WorkoutView: View {
                     onAddExercise: { addCustomExercise($0) },
                     onRemoveExercise: { removeCustomExercise($0) },
                     onAddWorkoutType: { addCustomWorkoutType($0) },
-                    onRemoveWorkoutType: { removeCustomWorkoutType($0) }
+                    onRemoveWorkoutType: { removeWorkoutType($0) }
                 )
                 .presentationBackground(Color(.systemBackground))
             }
         }
+    }
+
+    // MARK: - History Exercise Details
+
+    @ViewBuilder
+    private func exerciseDetailsView(for date: Date) -> some View {
+        let sets = allSets.filter { $0.date == date }
+        let grouped = Dictionary(grouping: sets) { $0.exerciseName }
+        let sortedNames = grouped.keys.sorted()
+
+        VStack(spacing: 6) {
+            ForEach(sortedNames, id: \.self) { name in
+                let exerciseSets = grouped[name]!.sorted { $0.setNumber < $1.setNumber }
+                let consolidated = consolidateSets(exerciseSets)
+
+                HStack(spacing: 0) {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        ForEach(Array(consolidated.enumerated()), id: \.offset) { _, entry in
+                            Text(entry)
+                                .font(.caption.weight(.medium).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+
+                if name != sortedNames.last {
+                    Divider()
+                }
+            }
+        }
+    }
+
+    private func consolidateSets(_ sets: [WorkoutSet]) -> [String] {
+        struct SetKey: Hashable {
+            let weight: Double
+            let reps: Int
+        }
+
+        var result: [String] = []
+        var i = 0
+        while i < sets.count {
+            let current = SetKey(weight: sets[i].weight, reps: sets[i].reps)
+            var count = 1
+            while i + count < sets.count &&
+                  SetKey(weight: sets[i + count].weight, reps: sets[i + count].reps) == current {
+                count += 1
+            }
+            let w = formatWeight(current.weight)
+            if count > 1 {
+                result.append("\(count) × \(w) lbs × \(current.reps)")
+            } else {
+                result.append("\(w) lbs × \(current.reps)")
+            }
+            i += count
+        }
+        return result
     }
 }
 
@@ -341,62 +492,83 @@ struct CategoryPickerSheet: View {
     let workoutTypes: [WorkoutType]
     let exercisesForType: (WorkoutType) -> [ExerciseInfo]
     let onSelect: (WorkoutType) -> Void
-    var onAddCustom: ((WorkoutType) -> Void)?
+    var onAddCustom: ((WorkoutType, [ExerciseInfo]) -> Void)?
+    var onDelete: ((WorkoutType) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
-    @State private var showingAddWorkoutType = false
+    @State private var showingCreateCustom = false
+    @State private var isEditing = false
+    @State private var deleteTarget: WorkoutType?
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
                     ForEach(workoutTypes) { type in
                         let exercises = exercisesForType(type)
-                        Button {
-                            onSelect(type)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: type.icon)
-                                        .font(.title2)
-                                        .foregroundStyle(AppColors.accent)
-                                        .frame(width: 36)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(type.name)
-                                            .font(.headline)
-                                        Text("\(exercises.count) exercises")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.tertiary)
+                        HStack(spacing: 0) {
+                            if isEditing {
+                                Button {
+                                    deleteTarget = type
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.red)
                                 }
+                                .padding(.trailing, 12)
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                            }
 
-                                FlowLayout(spacing: 6) {
-                                    ForEach(exercises) { exercise in
-                                        Text(exercise.name)
-                                            .font(.caption)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 5)
-                                            .background(AppColors.accent.opacity(0.1), in: Capsule())
+                            Button {
+                                if !isEditing {
+                                    onSelect(type)
+                                }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: type.icon)
+                                            .font(.title2)
                                             .foregroundStyle(AppColors.accent)
+                                            .frame(width: 36)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(type.name)
+                                                .font(.headline)
+                                                .foregroundStyle(Color(.label))
+                                            Text("\(exercises.count) exercises")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        if !isEditing {
+                                            Image(systemName: "chevron.right")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
+
+                                    FlowLayout(spacing: 6) {
+                                        ForEach(exercises) { exercise in
+                                            Text(exercise.name)
+                                                .font(.caption)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(AppColors.accent.opacity(0.1), in: Capsule())
+                                                .foregroundStyle(AppColors.accent)
+                                        }
                                     }
                                 }
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 14))
                             }
-                            .padding()
-                            .background {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(.fill.quinary)
-                            }
+                            .buttonStyle(.plain)
+                            .disabled(isEditing)
                         }
-                        .buttonStyle(.plain)
                     }
 
-                    if onAddCustom != nil {
+                    if onAddCustom != nil && !isEditing {
                         Button {
-                            showingAddWorkoutType = true
+                            showingCreateCustom = true
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "plus.circle.fill")
@@ -405,14 +577,11 @@ struct CategoryPickerSheet: View {
                                     .frame(width: 36)
                                 Text("Custom")
                                     .font(.headline)
-                                Spacer()
+                                    .foregroundStyle(Color(.label))
                             }
                             .padding()
-                            .background {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [8, 6]))
-                                    .foregroundStyle(Color(.quaternaryLabel))
-                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 14))
                         }
                         .buttonStyle(.plain)
                     }
@@ -425,13 +594,434 @@ struct CategoryPickerSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(isEditing ? "Done" : "Edit") {
+                        withAnimation(.easeInOut(duration: 0.25)) { isEditing.toggle() }
+                    }
+                }
             }
-            .sheet(isPresented: $showingAddWorkoutType) {
-                AddWorkoutTypeSheet { type in
-                    onAddCustom?(type)
+            .alert("Delete Workout?", isPresented: Binding(
+                get: { deleteTarget != nil },
+                set: { if !$0 { deleteTarget = nil } }
+            )) {
+                Button("Delete", role: .destructive) {
+                    if let target = deleteTarget {
+                        withAnimation { onDelete?(target) }
+                        deleteTarget = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) { deleteTarget = nil }
+            } message: {
+                if let target = deleteTarget {
+                    Text("This will permanently delete \"\(target.name)\" and all its exercises.")
+                }
+            }
+            .fullScreenCover(isPresented: $showingCreateCustom) {
+                CreateCustomWorkoutSheet { type, exercises in
+                    onAddCustom?(type, exercises)
+                    dismiss()
                 }
             }
         }
+    }
+}
+
+// MARK: - Create Custom Workout
+
+struct DraftExercise: Identifiable {
+    let id = UUID()
+    var name: String
+    var sets: [DraftSet]
+}
+
+struct DraftSet: Identifiable {
+    let id = UUID()
+    var weight: String
+    var reps: String
+}
+
+struct CreateCustomWorkoutSheet: View {
+    let onSave: (WorkoutType, [ExerciseInfo]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var step = 1
+
+    @State private var name = ""
+    @State private var selectedIcon = "figure.strengthtraining.traditional"
+    @State private var defaultSets = 3
+    @State private var defaultReps = 10
+    @State private var draftExercises: [DraftExercise] = []
+    @State private var showingSaveConfirm = false
+    @FocusState private var focusedField: Bool
+
+    private let iconOptions = [
+        "figure.strengthtraining.traditional",
+        "figure.arms.open",
+        "figure.walk",
+        "figure.run",
+        "figure.core.training",
+        "figure.flexibility",
+        "figure.highintensity.intervaltraining",
+        "figure.pilates",
+        "figure.yoga",
+        "dumbbell.fill",
+        "heart.circle.fill",
+        "bolt.fill",
+    ]
+
+    var body: some View {
+        NavigationStack {
+            if step == 1 {
+                setupStep
+            } else {
+                editorStep
+            }
+        }
+    }
+
+    // MARK: - Step 1: Setup
+
+    private var setupStep: some View {
+        Form {
+            Section {
+                TextField("Workout name", text: $name)
+                    .focused($focusedField)
+            }
+
+            Section("Icon") {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 16) {
+                    ForEach(iconOptions, id: \.self) { icon in
+                        Button {
+                            selectedIcon = icon
+                        } label: {
+                            Image(systemName: icon)
+                                .font(.title2)
+                                .frame(width: 44, height: 44)
+                                .background(
+                                    selectedIcon == icon ? AppColors.accent.opacity(0.15) : Color(.systemGray6),
+                                    in: RoundedRectangle(cornerRadius: 10)
+                                )
+                                .foregroundStyle(selectedIcon == icon ? AppColors.accent : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section {
+                Stepper(value: $defaultSets, in: 1...10) {
+                    HStack {
+                        Text("Sets per exercise")
+                        Spacer()
+                        Text("\(defaultSets)")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppColors.accent)
+                    }
+                }
+                Stepper(value: $defaultReps, in: 1...50) {
+                    HStack {
+                        Text("Reps per set")
+                        Spacer()
+                        Text("\(defaultReps)")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppColors.accent)
+                    }
+                }
+            } header: {
+                Text("Defaults")
+            } footer: {
+                Text("You can modify these for each exercise in the next step.")
+            }
+        }
+        .navigationTitle("New Workout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Next") {
+                    buildDraftExercises()
+                    withAnimation { step = 2 }
+                }
+                .fontWeight(.semibold)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .onAppear { focusedField = true }
+    }
+
+    // MARK: - Step 2: Editor
+
+    private var editorStep: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    ForEach(Array(draftExercises.enumerated()), id: \.element.id) { index, exercise in
+                        draftExerciseCard(index: index)
+                    }
+
+                    Button {
+                        let repsStr = "\(defaultReps)"
+                        let newSets = (0..<defaultSets).map { _ in DraftSet(weight: "", reps: repsStr) }
+                        withAnimation {
+                            draftExercises.append(DraftExercise(
+                                name: "",
+                                sets: newSets
+                            ))
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Exercise")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppColors.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background {
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [8, 6]))
+                                .foregroundStyle(AppColors.accent.opacity(0.3))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding()
+                .padding(.bottom, 8)
+            }
+            .scrollDismissesKeyboard(.interactively)
+
+            Button {
+                showingSaveConfirm = true
+            } label: {
+                HStack {
+                    Text("Save Workout")
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 20)
+                .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.vertical, 12)
+            .background(.bar)
+            .disabled(!hasValidExercises)
+        }
+        .navigationTitle(name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+            }
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    withAnimation { step = 1 }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.semibold))
+                        Text("Back")
+                    }
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    showingSaveConfirm = true
+                }
+                .fontWeight(.semibold)
+                .disabled(!hasValidExercises)
+            }
+        }
+        .confirmationDialog("Done editing?", isPresented: $showingSaveConfirm) {
+            Button("Save Workout") { saveWorkout() }
+            Button("Keep Editing", role: .cancel) { }
+        } message: {
+            Text("You can always edit this workout later from settings.")
+        }
+    }
+
+    // MARK: - Draft Exercise Card
+
+    @ViewBuilder
+    private func draftExerciseCard(index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                TextField("Exercise name", text: $draftExercises[index].name)
+                    .font(.title3.weight(.semibold))
+                Spacer()
+
+                HStack(spacing: 12) {
+                    if index > 0 {
+                        Button { moveDraft(at: index, direction: -1) } label: {
+                            Image(systemName: "arrow.up")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    if index < draftExercises.count - 1 {
+                        Button { moveDraft(at: index, direction: 1) } label: {
+                            Image(systemName: "arrow.down")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    if draftExercises.count > 1 {
+                        Button { deleteDraft(at: index) } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, 12)
+
+            Rectangle()
+                .fill(Color(.separator).opacity(0.3))
+                .frame(height: 1)
+                .padding(.bottom, 10)
+
+            HStack(spacing: 8) {
+                Text("SET")
+                    .frame(width: 24, alignment: .center)
+                Text("WEIGHT")
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Text("")
+                    .frame(width: 8)
+                Text("REPS")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.bottom, 8)
+
+            VStack(spacing: 8) {
+                ForEach(Array(draftExercises[index].sets.enumerated()), id: \.element.id) { setIdx, _ in
+                    HStack(spacing: 8) {
+                        Text("\(setIdx + 1)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color(.tertiaryLabel))
+                            .frame(width: 24)
+
+                        TextField("0", text: $draftExercises[index].sets[setIdx].weight)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .font(.body.weight(.bold))
+                            .textFieldStyle(.plain)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator).opacity(0.2), lineWidth: 1))
+
+                        Text("×")
+                            .font(.subheadline)
+                            .foregroundStyle(.tertiary)
+
+                        TextField("0", text: $draftExercises[index].sets[setIdx].reps)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .font(.body.weight(.bold))
+                            .textFieldStyle(.plain)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator).opacity(0.2), lineWidth: 1))
+                    }
+                }
+            }
+
+            HStack(spacing: 16) {
+                Button {
+                    let lastSet = draftExercises[index].sets.last
+                    draftExercises[index].sets.append(DraftSet(
+                        weight: lastSet?.weight ?? "",
+                        reps: lastSet?.reps ?? "\(defaultReps)"
+                    ))
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Set")
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AppColors.accent)
+                }
+
+                if draftExercises[index].sets.count > 1 {
+                    Button {
+                        draftExercises[index].sets.removeLast()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "minus.circle.fill")
+                            Text("Remove Set")
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.red)
+                    }
+                }
+            }
+            .padding(.top, 10)
+        }
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.fill.quinary)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var hasValidExercises: Bool {
+        draftExercises.contains { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    private func buildDraftExercises() {
+        let repsStr = "\(defaultReps)"
+        draftExercises = [
+            DraftExercise(name: "", sets: (0..<defaultSets).map { _ in DraftSet(weight: "", reps: repsStr) }),
+            DraftExercise(name: "", sets: (0..<defaultSets).map { _ in DraftSet(weight: "", reps: repsStr) }),
+        ]
+    }
+
+    private func moveDraft(at index: Int, direction: Int) {
+        let newIndex = index + direction
+        guard newIndex >= 0 && newIndex < draftExercises.count else { return }
+        withAnimation { draftExercises.swapAt(index, newIndex) }
+    }
+
+    private func deleteDraft(at index: Int) {
+        guard draftExercises.count > 1 else { return }
+        withAnimation { draftExercises.remove(at: index) }
+    }
+
+    private func saveWorkout() {
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let type = WorkoutType(name: trimmedName, icon: selectedIcon, isBuiltIn: false)
+
+        let exercises = draftExercises.compactMap { draft -> ExerciseInfo? in
+            let exerciseName = draft.name.trimmingCharacters(in: .whitespaces)
+            guard !exerciseName.isEmpty else { return nil }
+            let firstWeight = Double(draft.sets.first?.weight ?? "") ?? 50
+            let firstReps = Int(draft.sets.first?.reps ?? "") ?? defaultReps
+            return ExerciseInfo(
+                name: exerciseName,
+                categoryName: trimmedName,
+                defaultWeight: firstWeight,
+                defaultReps: firstReps
+            )
+        }
+
+        onSave(type, exercises)
+        dismiss()
     }
 }
 
@@ -797,7 +1387,6 @@ struct WorkoutTypeDetailView: View {
 
 struct ActiveWorkoutView: View {
     let workoutType: WorkoutType
-    let exercises: [ExerciseInfo]
     @Binding var restDuration: Int
     var editDate: Date?
 
@@ -805,16 +1394,31 @@ struct ActiveWorkoutView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \WorkoutSet.date, order: .reverse) private var allSets: [WorkoutSet]
 
+    @State private var activeExercises: [ExerciseInfo]
     @State private var sessionSets: [String: [SetEntry]] = [:]
+    @State private var isPreviewMode: Bool
+    @State private var showingDiscardConfirm = false
     @State private var showingFinishConfirm = false
+    @State private var showJourneySummary = false
+    @State private var journeyData: [JourneyBlock] = []
+    @State private var nextCompletionOrder: Int = 0
     @State private var isEditing = false
     @State private var timerRemaining: Int = 0
     @State private var timerActive = false
     @State private var timerTask: Task<Void, Never>?
     @State private var elapsedSeconds: Int = 0
     @State private var sessionTimerTask: Task<Void, Never>?
+    @State private var currentActivity: Activity<RestTimerAttributes>?
 
     private var isEditMode: Bool { editDate != nil }
+
+    init(workoutType: WorkoutType, exercises: [ExerciseInfo], restDuration: Binding<Int>, editDate: Date? = nil) {
+        self.workoutType = workoutType
+        self._restDuration = restDuration
+        self.editDate = editDate
+        self._activeExercises = State(initialValue: exercises)
+        self._isPreviewMode = State(initialValue: editDate == nil)
+    }
 
     private var editDateTitle: String {
         guard let editDate else { return workoutType.name }
@@ -822,18 +1426,18 @@ struct ActiveWorkoutView: View {
     }
 
     private var completedExerciseCount: Int {
-        exercises.filter { exercise in
+        activeExercises.filter { exercise in
             let sets = sessionSets[exercise.name] ?? []
             return !sets.isEmpty && sets.allSatisfy { $0.completed }
         }.count
     }
 
     private var totalSets: Int {
-        exercises.reduce(0) { $0 + (sessionSets[$1.name]?.count ?? 0) }
+        activeExercises.reduce(0) { $0 + (sessionSets[$1.name]?.count ?? 0) }
     }
 
     private var completedSets: Int {
-        exercises.reduce(0) { $0 + (sessionSets[$1.name]?.filter(\.completed).count ?? 0) }
+        activeExercises.reduce(0) { $0 + (sessionSets[$1.name]?.filter(\.completed).count ?? 0) }
     }
 
     private var progressFraction: Double {
@@ -841,77 +1445,59 @@ struct ActiveWorkoutView: View {
         return Double(completedSets) / Double(totalSets)
     }
 
-    struct SetEntry: Identifiable {
-        let id = UUID()
-        var weight: String = ""
-        var reps: String = ""
-        var completed = false
+    var body: some View {
+        if showJourneySummary {
+            WorkoutJourneyView(
+                workoutType: workoutType,
+                journeyData: journeyData,
+                duration: elapsedSeconds,
+                restDuration: restDuration,
+                onDone: { dismiss() }
+            )
+        } else {
+            workoutContent
+        }
     }
 
-    var body: some View {
+    private var workoutContent: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                VStack(spacing: 8) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color(.systemGray5))
-                                .frame(height: 10)
-                            Capsule()
-                                .fill(AppColors.accent)
-                                .frame(width: geo.size.width * progressFraction, height: 6)
-                                .animation(.easeInOut(duration: 0.3), value: progressFraction)
-                        }
-                    }
-                    .frame(height: 10)
-
-                    HStack {
-                        Text("\(completedSets)/\(totalSets) sets")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        if !isEditMode {
-                            HStack(spacing: 5) {
-                                Image(systemName: "timer")
-                                    .font(.subheadline)
-                                Text(formatElapsed(elapsedSeconds))
-                                    .font(.body.weight(.semibold).monospacedDigit())
-                            }
-                            .foregroundStyle(AppColors.accent)
-                        }
-                    }
+                if !isPreviewMode {
+                    progressHeader
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 10)
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        ForEach(Array(exercises.enumerated()), id: \.element.id) { index, exercise in
-                            exerciseCard(exercise, number: index + 1)
+                        ForEach(Array(activeExercises.enumerated()), id: \.element.id) { index, exercise in
+                            exerciseCard(exercise, number: index + 1, exerciseIndex: index)
                         }
                     }
                     .padding()
                     .padding(.bottom, 8)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .toolbar {
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") {
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                        }
-                    }
-                }
 
-                restTimerBar
+                if isPreviewMode {
+                    startWorkoutBar
+                } else {
+                    restTimerBar
+                }
             }
-            .navigationTitle(isEditMode ? editDateTitle : workoutType.name)
+            .navigationTitle(isPreviewMode ? workoutType.name : (isEditMode ? editDateTitle : workoutType.name))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        if !isEditMode && hasAnyInput {
-                            showingFinishConfirm = true
+                        if isPreviewMode {
+                            dismiss()
+                        } else if !isEditMode && hasAnyInput {
+                            showingDiscardConfirm = true
                         } else {
                             stopTimer()
                             dismiss()
@@ -919,31 +1505,49 @@ struct ActiveWorkoutView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    HStack(spacing: 12) {
-                        if isEditMode {
+                    if !isPreviewMode {
+                        HStack(spacing: 12) {
                             Button {
                                 withAnimation { isEditing.toggle() }
                             } label: {
                                 Image(systemName: isEditing ? "checkmark" : "pencil")
                                     .font(.subheadline)
                             }
-                        }
-                        Button(isEditMode ? "Save" : "Finish") { stopTimer(); saveAndDismiss() }
+
+                            Button(isEditMode ? "Save" : "Finish") {
+                                if isEditMode {
+                                    stopTimer()
+                                    saveAndDismiss()
+                                } else {
+                                    showingFinishConfirm = true
+                                }
+                            }
                             .fontWeight(.semibold)
                             .disabled(!hasAnyInput)
+                        }
                     }
                 }
             }
-            .confirmationDialog("Discard workout?", isPresented: $showingFinishConfirm) {
-                Button("Discard", role: .destructive) { stopTimer(); dismiss() }
-                Button("Save & Finish") { stopTimer(); saveAndDismiss() }
+            .confirmationDialog("Discard workout?", isPresented: $showingDiscardConfirm) {
+                Button("Discard", role: .destructive) { stopTimer(); endLiveActivity(); dismiss() }
+                Button("Save & Finish") { stopTimer(); endLiveActivity(); saveAndDismiss() }
+                Button("Cancel", role: .cancel) { }
+            }
+            .confirmationDialog("Finish workout?", isPresented: $showingFinishConfirm) {
+                Button("Finish") {
+                    stopTimer()
+                    endLiveActivity()
+                    saveWorkout()
+                    journeyData = captureJourneyData()
+                    showJourneySummary = true
+                }
                 Button("Cancel", role: .cancel) { }
             }
             .onAppear {
                 prepopulate()
                 if isEditMode {
                     isEditing = true
-                } else {
+                } else if !isPreviewMode {
                     startSessionTimer()
                 }
             }
@@ -951,6 +1555,72 @@ struct ActiveWorkoutView: View {
                 sessionTimerTask?.cancel()
             }
         }
+    }
+
+    // MARK: - Progress Header
+
+    private var progressHeader: some View {
+        VStack(spacing: 8) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 10)
+                    Capsule()
+                        .fill(AppColors.accent)
+                        .frame(width: geo.size.width * progressFraction, height: 6)
+                        .animation(.easeInOut(duration: 0.3), value: progressFraction)
+                }
+            }
+            .frame(height: 10)
+
+            HStack {
+                Text("\(completedSets)/\(totalSets) sets")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !isEditMode {
+                    HStack(spacing: 5) {
+                        Image(systemName: "timer")
+                            .font(.subheadline)
+                        Text(formatElapsed(elapsedSeconds))
+                            .font(.body.weight(.semibold).monospacedDigit())
+                    }
+                    .foregroundStyle(AppColors.accent)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: - Start Workout Bar (Preview Mode)
+
+    private var startWorkoutBar: some View {
+        Button {
+            withAnimation {
+                isPreviewMode = false
+            }
+            startSessionTimer()
+        } label: {
+            HStack {
+                Text("Ready? Start Workout")
+                    .fontWeight(.semibold)
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .fontWeight(.semibold)
+            }
+            .font(.body)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 14))
+            .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 
     // MARK: - Timer Bar
@@ -992,15 +1662,19 @@ struct ActiveWorkoutView: View {
                 Button {
                     startRestTimer()
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "timer")
-                        Text("Rest \(formatTimer(restDuration))")
-                            .fontWeight(.semibold)
+                    HStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: "timer")
+                            Text("Rest \(formatTimer(restDuration))")
+                        }
+                        .fontWeight(.semibold)
+                        Spacer()
                     }
-                    .font(.subheadline)
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 20)
+                    .background(AppColors.accent, in: RoundedRectangle(cornerRadius: 14))
                     .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -1014,7 +1688,7 @@ struct ActiveWorkoutView: View {
     // MARK: - Exercise Card
 
     @ViewBuilder
-    private func exerciseCard(_ exercise: ExerciseInfo, number: Int) -> some View {
+    private func exerciseCard(_ exercise: ExerciseInfo, number: Int, exerciseIndex: Int) -> some View {
         let sets = sessionSets[exercise.name] ?? []
         let completedCount = sets.filter(\.completed).count
 
@@ -1023,9 +1697,40 @@ struct ActiveWorkoutView: View {
                 Text(exercise.name)
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("\(completedCount)/\(sets.count)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+
+                if isPreviewMode || isEditing {
+                    HStack(spacing: 12) {
+                        Button {
+                            moveExercise(at: exerciseIndex, direction: -1)
+                        } label: {
+                            Image(systemName: "arrow.up")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(exerciseIndex > 0 ? Color(.label) : Color(.quaternaryLabel))
+                        }
+                        .disabled(exerciseIndex == 0)
+
+                        Button {
+                            moveExercise(at: exerciseIndex, direction: 1)
+                        } label: {
+                            Image(systemName: "arrow.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(exerciseIndex < activeExercises.count - 1 ? Color(.label) : Color(.quaternaryLabel))
+                        }
+                        .disabled(exerciseIndex == activeExercises.count - 1)
+
+                        Button {
+                            deleteExercise(at: exerciseIndex)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                } else {
+                    Text("\(completedCount)/\(sets.count)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.bottom, 12)
 
@@ -1044,8 +1749,10 @@ struct ActiveWorkoutView: View {
                     .frame(width: 8)
                 Text("REPS")
                     .frame(maxWidth: .infinity, alignment: .center)
-                Color.clear
-                    .frame(width: 36)
+                if !isPreviewMode {
+                    Color.clear
+                        .frame(width: 36)
+                }
             }
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.primary)
@@ -1057,6 +1764,34 @@ struct ActiveWorkoutView: View {
                 }
             }
 
+            if isPreviewMode || isEditing {
+                HStack(spacing: 16) {
+                    Button {
+                        addSet(for: exercise.name, exercise: exercise)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Set")
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(AppColors.accent)
+                    }
+
+                    if sets.count > 1 {
+                        Button {
+                            removeLastSet(for: exercise.name)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "minus.circle.fill")
+                                Text("Remove Set")
+                            }
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .padding(.top, 10)
+            }
         }
         .padding()
         .background {
@@ -1094,26 +1829,28 @@ struct ActiveWorkoutView: View {
                 bg: fieldBg
             )
 
-            Button {
-                markSetDone(exercise: exercise, index: index)
-            } label: {
-                ZStack {
-                    if setEntry.completed {
-                        Circle()
-                            .fill(AppColors.success)
-                            .frame(width: 30, height: 30)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
-                    } else {
-                        Circle()
-                            .stroke(Color(.systemGray4), lineWidth: 2)
-                            .frame(width: 30, height: 30)
+            if !isPreviewMode {
+                Button {
+                    markSetDone(exercise: exercise, index: index)
+                } label: {
+                    ZStack {
+                        if setEntry.completed {
+                            Circle()
+                                .fill(AppColors.success)
+                                .frame(width: 30, height: 30)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                        } else {
+                            Circle()
+                                .stroke(Color(.systemGray4), lineWidth: 2)
+                                .frame(width: 30, height: 30)
+                        }
                     }
+                    .frame(width: 36, height: 44)
                 }
-                .frame(width: 36, height: 44)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -1138,7 +1875,6 @@ struct ActiveWorkoutView: View {
         )
     }
 
-
     // MARK: - Helpers
 
     private func binding(exercise: String, index: Int, keyPath: WritableKeyPath<SetEntry, String>) -> Binding<String> {
@@ -1160,7 +1896,7 @@ struct ActiveWorkoutView: View {
         if let editDate {
             let daySets = allSets.filter { $0.date == editDate }
             let grouped = Dictionary(grouping: daySets) { $0.exerciseName }
-            for exercise in exercises {
+            for exercise in activeExercises {
                 if let sets = grouped[exercise.name]?.sorted(by: { $0.setNumber < $1.setNumber }), !sets.isEmpty {
                     sessionSets[exercise.name] = sets.map { set in
                         SetEntry(weight: formatWeight(set.weight), reps: "\(set.reps)", completed: true)
@@ -1170,7 +1906,7 @@ struct ActiveWorkoutView: View {
                 }
             }
         } else {
-            for exercise in exercises {
+            for exercise in activeExercises {
                 let lastSets = previousSets(for: exercise.name)
                 if lastSets.isEmpty {
                     let w = formatWeight(exercise.defaultWeight)
@@ -1197,30 +1933,57 @@ struct ActiveWorkoutView: View {
             .sorted { $0.setNumber < $1.setNumber }
     }
 
-    private func progressionSuggestion(for exerciseName: String) -> String? {
-        let previous = previousSets(for: exerciseName)
-        guard !previous.isEmpty else { return nil }
-        let maxWeight = previous.map(\.weight).max() ?? 0
-        let allHitTarget = previous.allSatisfy { $0.reps >= 12 }
-        if allHitTarget {
-            return "Try \(formatWeight(maxWeight + 5)) lbs"
-        }
-        let avgReps = previous.map(\.reps).reduce(0, +) / previous.count
-        if avgReps < 8 {
-            return "Focus on \(formatWeight(maxWeight)) × 8+"
-        }
-        return nil
-    }
-
     private func markSetDone(exercise: String, index: Int) {
         guard sessionSets[exercise] != nil && index < sessionSets[exercise]!.count else { return }
         sessionSets[exercise]![index].completed.toggle()
+        if sessionSets[exercise]![index].completed {
+            sessionSets[exercise]![index].completionOrder = nextCompletionOrder
+            nextCompletionOrder += 1
+        } else {
+            sessionSets[exercise]![index].completionOrder = -1
+        }
     }
+
+    // MARK: - Exercise Management
+
+    private func moveExercise(at index: Int, direction: Int) {
+        let newIndex = index + direction
+        guard newIndex >= 0 && newIndex < activeExercises.count else { return }
+        withAnimation {
+            activeExercises.swapAt(index, newIndex)
+        }
+    }
+
+    private func deleteExercise(at index: Int) {
+        guard activeExercises.count > 1 else { return }
+        let name = activeExercises[index].name
+        withAnimation {
+            activeExercises.remove(at: index)
+            sessionSets.removeValue(forKey: name)
+        }
+    }
+
+    private func addSet(for exerciseName: String, exercise: ExerciseInfo) {
+        let lastSet = sessionSets[exerciseName]?.last
+        let newSet = SetEntry(
+            weight: lastSet?.weight ?? formatWeight(exercise.defaultWeight),
+            reps: lastSet?.reps ?? "\(exercise.defaultReps)"
+        )
+        sessionSets[exerciseName, default: []].append(newSet)
+    }
+
+    private func removeLastSet(for exerciseName: String) {
+        guard sessionSets[exerciseName] != nil && sessionSets[exerciseName]!.count > 1 else { return }
+        sessionSets[exerciseName]!.removeLast()
+    }
+
+    // MARK: - Timer
 
     private func startRestTimer() {
         stopTimer()
         timerRemaining = restDuration
         timerActive = true
+        startLiveActivity()
         timerTask = Task {
             while timerRemaining > 0 && !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
@@ -1229,6 +1992,7 @@ struct ActiveWorkoutView: View {
                 }
             }
             if !Task.isCancelled {
+                endLiveActivity()
                 timerActive = false
             }
         }
@@ -1236,6 +2000,7 @@ struct ActiveWorkoutView: View {
 
     private func skipTimer() {
         stopTimer()
+        endLiveActivity()
         withAnimation {
             timerRemaining = 0
             timerActive = false
@@ -1258,6 +2023,35 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    // MARK: - Live Activity
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        let attributes = RestTimerAttributes(workoutName: workoutType.name)
+        let endTime = Date.now.addingTimeInterval(TimeInterval(restDuration))
+        let state = RestTimerAttributes.ContentState(endTime: endTime, totalDuration: restDuration)
+        let content = ActivityContent(state: state, staleDate: endTime)
+
+        do {
+            currentActivity = try Activity.request(attributes: attributes, content: content)
+        } catch {
+            // Live Activity not available
+        }
+    }
+
+    private func endLiveActivity() {
+        guard let activity = currentActivity else { return }
+        let state = RestTimerAttributes.ContentState(endTime: .now, totalDuration: 0)
+        let content = ActivityContent(state: state, staleDate: nil)
+        Task {
+            await activity.end(content, dismissalPolicy: .immediate)
+        }
+        currentActivity = nil
+    }
+
+    // MARK: - Format
+
     private func formatTimer(_ seconds: Int) -> String {
         let m = seconds / 60
         let s = seconds % 60
@@ -1274,6 +2068,85 @@ struct ActiveWorkoutView: View {
         return String(format: "%d:%02d", m, s)
     }
 
+    private func formatWeight(_ weight: Double) -> String {
+        weight.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(weight))" : String(format: "%.1f", weight)
+    }
+
+    // MARK: - Save
+
+    private func captureJourneyData() -> [JourneyBlock] {
+        struct OrderedSet {
+            let exerciseName: String
+            let weight: String
+            let reps: String
+            let setNumber: Int
+            let order: Int
+        }
+
+        var orderedSets: [OrderedSet] = []
+        for (exerciseIdx, exercise) in activeExercises.enumerated() {
+            let sets = sessionSets[exercise.name] ?? []
+            for (setIdx, entry) in sets.enumerated() {
+                guard !entry.weight.isEmpty && !entry.reps.isEmpty else { continue }
+                let order = entry.completionOrder >= 0 ? entry.completionOrder : (10000 + exerciseIdx * 100 + setIdx)
+                orderedSets.append(OrderedSet(
+                    exerciseName: exercise.name,
+                    weight: entry.weight,
+                    reps: entry.reps,
+                    setNumber: setIdx + 1,
+                    order: order
+                ))
+            }
+        }
+
+        orderedSets.sort { $0.order < $1.order }
+
+        var blocks: [JourneyBlock] = []
+        var currentName = ""
+        var currentSets: [JourneySetInfo] = []
+
+        for set in orderedSets {
+            if set.exerciseName != currentName {
+                if !currentSets.isEmpty {
+                    blocks.append(JourneyBlock(exerciseName: currentName, sets: currentSets))
+                }
+                currentName = set.exerciseName
+                currentSets = []
+            }
+            currentSets.append(JourneySetInfo(weight: set.weight, reps: set.reps, setNumber: set.setNumber))
+        }
+        if !currentSets.isEmpty {
+            blocks.append(JourneyBlock(exerciseName: currentName, sets: currentSets))
+        }
+
+        return blocks
+    }
+
+    private func saveWorkout() {
+        sessionTimerTask?.cancel()
+
+        let saveDate = Date()
+        for exercise in activeExercises {
+            let sets = sessionSets[exercise.name] ?? []
+            for (index, entry) in sets.enumerated() {
+                guard let weight = Double(entry.weight), let reps = Int(entry.reps),
+                      weight > 0, reps > 0 else { continue }
+                let workoutSet = WorkoutSet(
+                    exerciseName: exercise.name,
+                    weight: weight,
+                    reps: reps,
+                    setNumber: index,
+                    date: saveDate
+                )
+                modelContext.insert(workoutSet)
+            }
+        }
+
+        let gymEntry = GymEntry(date: saveDate, duration: elapsedSeconds)
+        modelContext.insert(gymEntry)
+        try? modelContext.save()
+    }
+
     private func saveAndDismiss() {
         sessionTimerTask?.cancel()
 
@@ -1285,7 +2158,7 @@ struct ActiveWorkoutView: View {
         }
 
         let saveDate = editDate ?? Date()
-        for exercise in exercises {
+        for exercise in activeExercises {
             let sets = sessionSets[exercise.name] ?? []
             for (index, entry) in sets.enumerated() {
                 guard let weight = Double(entry.weight), let reps = Int(entry.reps),
@@ -1309,11 +2182,190 @@ struct ActiveWorkoutView: View {
         try? modelContext.save()
         dismiss()
     }
+}
 
-    private func formatWeight(_ weight: Double) -> String {
-        weight.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(weight))" : String(format: "%.1f", weight)
+// MARK: - Workout Journey View
+
+struct WorkoutJourneyView: View {
+    let workoutType: WorkoutType
+    let journeyData: [JourneyBlock]
+    let duration: Int
+    let restDuration: Int
+    let onDone: () -> Void
+
+    private var totalSets: Int {
+        journeyData.reduce(0) { $0 + $1.sets.count }
+    }
+
+    private var exerciseCount: Int {
+        Set(journeyData.map(\.exerciseName)).count
+    }
+
+    private var totalVolume: String {
+        let vol = journeyData.reduce(0) { total, block in
+            total + block.sets.reduce(0) { $0 + Int((Double($1.weight) ?? 0) * Double(Int($1.reps) ?? 0)) }
+        }
+        if vol >= 1000 {
+            return String(format: "%.1fk", Double(vol) / 1000)
+        }
+        return "\(vol)"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 56))
+                            .foregroundStyle(AppColors.success)
+
+                        Text("Workout Complete")
+                            .font(.title2.weight(.bold))
+
+                        Text(workoutType.name)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
+
+                    HStack(spacing: 0) {
+                        statItem(value: formatDuration(duration), label: "Duration", icon: "timer")
+                        Divider().frame(height: 32)
+                        statItem(value: "\(exerciseCount)", label: "Exercises", icon: "dumbbell.fill")
+                        Divider().frame(height: 32)
+                        statItem(value: "\(totalSets)", label: "Sets", icon: "checkmark.circle")
+                        Divider().frame(height: 32)
+                        statItem(value: "\(totalVolume)", label: "Volume", icon: "scalemass")
+                    }
+                    .padding(.vertical, 16)
+                    .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal)
+                    .padding(.bottom, 24)
+
+                    VStack(spacing: 0) {
+                        ForEach(Array(journeyData.enumerated()), id: \.element.id) { blockIdx, block in
+                            VStack(alignment: .leading, spacing: 0) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "dumbbell.fill")
+                                        .font(.subheadline)
+                                        .foregroundStyle(AppColors.accent)
+                                    Text(block.exerciseName)
+                                        .font(.headline)
+                                    Spacer()
+                                    Text("\(block.sets.count) sets")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(.fill.quaternary, in: Capsule())
+                                }
+                                .padding(.bottom, 12)
+
+                                ForEach(Array(block.sets.enumerated()), id: \.element.id) { setIdx, set in
+                                    HStack {
+                                        Text("Set \(set.setNumber)")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 48, alignment: .leading)
+
+                                        Text("\(set.weight) lbs")
+                                            .font(.body.weight(.semibold).monospacedDigit())
+
+                                        Text("×")
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+
+                                        Text("\(set.reps) reps")
+                                            .font(.body.weight(.semibold).monospacedDigit())
+
+                                        Spacer()
+
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.subheadline)
+                                            .foregroundStyle(AppColors.success)
+                                    }
+                                    .padding(.vertical, 8)
+
+                                    if setIdx < block.sets.count - 1 {
+                                        HStack(spacing: 6) {
+                                            Rectangle()
+                                                .fill(Color(.separator).opacity(0.3))
+                                                .frame(height: 1)
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "timer")
+                                                Text(formatTimer(restDuration))
+                                            }
+                                            .font(.caption2)
+                                            .foregroundStyle(Color(.quaternaryLabel))
+                                            Rectangle()
+                                                .fill(Color(.separator).opacity(0.3))
+                                                .frame(height: 1)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal)
+
+                            if blockIdx < journeyData.count - 1 {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "timer")
+                                        .font(.caption)
+                                    Text("Rest \(formatTimer(restDuration))")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.tertiary)
+                                .padding(.vertical, 12)
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 20)
+            }
+            .navigationTitle("Journey")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { onDone() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func statItem(value: String, label: String, icon: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(AppColors.accent)
+            Text(value)
+                .font(.title3.weight(.bold).monospacedDigit())
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func formatTimer(_ seconds: Int) -> String {
+        let m = seconds / 60
+        let s = seconds % 60
+        return String(format: "%d:%02d", m, s)
+    }
+
+    private func formatDuration(_ totalSeconds: Int) -> String {
+        let h = totalSeconds / 3600
+        let m = (totalSeconds % 3600) / 60
+        if h > 0 { return "\(h)h \(m)m" }
+        return "\(m)m"
     }
 }
+
+// MARK: - Array Extension
 
 private extension Array {
     subscript(safe index: Int) -> Element? {
