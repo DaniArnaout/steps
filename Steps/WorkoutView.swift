@@ -387,6 +387,8 @@ struct WorkoutView: View {
                 .padding(.vertical, 12)
                 .background(.bar)
             }
+            .frame(maxWidth: 500)
+            .frame(maxWidth: .infinity)
             .navigationTitle("Workout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

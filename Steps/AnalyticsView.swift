@@ -165,6 +165,8 @@ struct AnalyticsView: View {
                         }
                     }
                 }
+                .frame(maxWidth: 500)
+                .frame(maxWidth: .infinity)
                 .padding(.bottom, 32)
             }
             .navigationTitle("Analytics")

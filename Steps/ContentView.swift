@@ -281,12 +281,16 @@ struct ContentView: View {
 
     private var homeTab: some View {
         NavigationStack {
-            VStack(spacing: 10) {
-                weekCard
-                activityCard
-                foodCard
-                weightCard
-                Spacer()
+            ScrollView {
+                VStack(spacing: 10) {
+                    weekCard
+                    activityCard
+                    foodCard
+                    weightCard
+                }
+                .frame(maxWidth: 500)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
