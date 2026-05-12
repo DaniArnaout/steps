@@ -39,6 +39,10 @@ final class StepCounter {
     var isAuthorized = false
     var errorMessage: String?
 
+    #if DEBUG
+    var mockHistory: [DaySteps]?
+    #endif
+
     private let healthStore = HKHealthStore()
     private let stepType = HKQuantityType(.stepCount)
     private var observeTask: Task<Void, Never>?
@@ -69,6 +73,14 @@ final class StepCounter {
     }
 
     func fetchHistory(days: Int) async -> [DaySteps] {
+        #if DEBUG
+        if let mock = mockHistory {
+            let calendar = Calendar.current
+            let today = calendar.startOfDay(for: Date())
+            guard let start = calendar.date(byAdding: .day, value: -(days - 1), to: today) else { return mock }
+            return mock.filter { $0.date >= start }
+        }
+        #endif
         guard isAuthorized else { return [] }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())

@@ -329,7 +329,7 @@ struct ContentView: View {
                     .tint(Color(.label))
             }
             .sheet(isPresented: $showingSettings) {
-                GoalsSettingsSheet(goalStore: goalStore)
+                GoalsSettingsSheet(goalStore: goalStore, stepCounter: stepCounter)
                     .tint(Color(.label))
             }
             .sheet(isPresented: $showingWeightLog) {
@@ -898,7 +898,17 @@ struct EditFoodEntrySheet: View {
 
 struct GoalsSettingsSheet: View {
     var goalStore: GoalStore
+    var stepCounter: StepCounter? = nil
     @Environment(\.dismiss) private var dismiss
+
+    #if DEBUG
+    @Environment(\.modelContext) private var modelContext
+    @Query private var existingFood: [FoodEntry]
+    @Query private var existingGym: [GymEntry]
+    @Query private var existingSets: [WorkoutSet]
+    @Query private var existingWeight: [WeightEntry]
+    @AppStorage("stepsEnabled") private var stepsEnabledFlag = false
+    #endif
 
     @State private var stepsText = ""
     @State private var caloriesText = ""
@@ -1036,6 +1046,32 @@ struct GoalsSettingsSheet: View {
                 } footer: {
                     Text("Send us feedback or report issues.")
                 }
+
+                #if DEBUG
+                Section {
+                    Button {
+                        seedDemoData()
+                    } label: {
+                        HStack {
+                            Image(systemName: "wand.and.stars")
+                                .foregroundStyle(AppColors.accent)
+                            Text("Fill Demo Data")
+                        }
+                    }
+                    Button(role: .destructive) {
+                        clearAllData()
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Clear All Data")
+                        }
+                    }
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Debug only. Not included in App Store builds.")
+                }
+                #endif
             }
             .navigationTitle("Goals")
             .navigationBarTitleDisplayMode(.inline)
@@ -1070,6 +1106,125 @@ struct GoalsSettingsSheet: View {
             }
         }
     }
+
+    #if DEBUG
+    private func seedDemoData() {
+        clearAllData()
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        var fullHistory: [DaySteps] = []
+        for dayOffset in 0..<90 {
+            if let day = calendar.date(byAdding: .day, value: -dayOffset, to: calendar.startOfDay(for: now)) {
+                let steps = Int.random(in: 6500...9800)
+                fullHistory.append(DaySteps(date: day, steps: steps))
+            }
+        }
+        fullHistory.sort { $0.date < $1.date }
+
+        let fakeWeek = Array(fullHistory.suffix(7))
+        if let data = try? JSONEncoder().encode(fakeWeek) {
+            UserDefaults.standard.set(data, forKey: "stepsCacheV1")
+        }
+        stepCounter?.pastWeek = fakeWeek
+        stepCounter?.todaySteps = fakeWeek.last?.steps ?? 7000
+        #if DEBUG
+        stepCounter?.mockHistory = fullHistory
+        #endif
+        stepsEnabledFlag = true
+
+        let foodTemplate: [(String, Int, Int, MealCategory)] = [
+            ("Oats", 320, 12, .breakfast),
+            ("Greek Yogurt", 150, 18, .breakfast),
+            ("Chicken & Rice", 620, 45, .lunch),
+            ("Protein Shake", 180, 30, .snack),
+            ("Salmon & Veggies", 580, 42, .dinner),
+        ]
+
+        for dayOffset in 0..<7 {
+            guard let day = calendar.date(byAdding: .day, value: -dayOffset, to: now) else { continue }
+            for (idx, item) in foodTemplate.enumerated() {
+                let hour = [8, 9, 13, 16, 19][idx]
+                let entryDate = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
+                let entry = FoodEntry(
+                    name: item.0,
+                    calories: item.1 + Int.random(in: -30...30),
+                    protein: item.2 + Int.random(in: -3...3),
+                    date: entryDate,
+                    category: item.3
+                )
+                modelContext.insert(entry)
+            }
+
+            let weightVariance = Double(dayOffset) * 0.2
+            let weight = WeightEntry(
+                weight: 178.0 + weightVariance + Double.random(in: -0.4...0.4),
+                bodyFat: 18.5 + weightVariance * 0.1,
+                date: day
+            )
+            modelContext.insert(weight)
+        }
+
+        let workoutDayOffsets = [0, 2, 4, 6]
+        for offset in workoutDayOffsets {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: now) else { continue }
+            let workoutDate = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: day) ?? day
+            let workoutID = UUID().uuidString
+            let isUpper = offset % 4 == 0
+
+            let exercises: [(String, Double, Int)] = isUpper
+                ? [
+                    ("Bench Press", 145, 10),
+                    ("Row", 110, 10),
+                    ("Shoulder Press", 85, 10),
+                    ("Lat Pulldown", 130, 10),
+                    ("Bicep Curls", 30, 12),
+                    ("Tricep Curls", 30, 12),
+                ]
+                : [
+                    ("Leg Extension", 100, 12),
+                    ("Leg Curl", 90, 12),
+                    ("Glute Kickback", 110, 12),
+                    ("Hip Adductor", 130, 15),
+                    ("Hip Abductor", 110, 15),
+                ]
+
+            for exercise in exercises {
+                for setNumber in 0..<3 {
+                    let set = WorkoutSet(
+                        exerciseName: exercise.0,
+                        weight: exercise.1,
+                        reps: exercise.2,
+                        setNumber: setNumber,
+                        date: workoutDate,
+                        workoutID: workoutID
+                    )
+                    modelContext.insert(set)
+                }
+            }
+
+            let gym = GymEntry(date: workoutDate, duration: 2700 + Int.random(in: -300...600), workoutID: workoutID)
+            modelContext.insert(gym)
+        }
+
+        try? modelContext.save()
+        dismiss()
+    }
+
+    private func clearAllData() {
+        for entry in existingFood { modelContext.delete(entry) }
+        for entry in existingGym { modelContext.delete(entry) }
+        for entry in existingSets { modelContext.delete(entry) }
+        for entry in existingWeight { modelContext.delete(entry) }
+        try? modelContext.save()
+        UserDefaults.standard.removeObject(forKey: "stepsCacheV1")
+        stepCounter?.pastWeek = []
+        stepCounter?.todaySteps = 0
+        stepCounter?.mockHistory = nil
+        stepsEnabledFlag = false
+    }
+    #endif
 
     private func sourceLink(icon: String, title: String, source: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {

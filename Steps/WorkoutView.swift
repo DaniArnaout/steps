@@ -2437,7 +2437,7 @@ struct WorkoutJourneyView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 24)
 
-                    VStack(spacing: 0) {
+                    VStack(spacing: 12) {
                         ForEach(Array(journeyData.enumerated()), id: \.element.id) { blockIdx, block in
                             VStack(alignment: .leading, spacing: 0) {
                                 HStack(spacing: 10) {
