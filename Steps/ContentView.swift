@@ -53,6 +53,40 @@ final class GoalStore {
     }
 }
 
+enum WeightUnit: String, CaseIterable {
+    case lbs
+    case kg
+
+    var label: String { rawValue }
+
+    static var current: WeightUnit {
+        let raw = UserDefaults.standard.string(forKey: "weightUnit") ?? WeightUnit.lbs.rawValue
+        return WeightUnit(rawValue: raw) ?? .lbs
+    }
+
+    func fromLbs(_ lbs: Double) -> Double {
+        switch self {
+        case .lbs: return lbs
+        case .kg: return lbs * 0.453592
+        }
+    }
+
+    func toLbs(_ value: Double) -> Double {
+        switch self {
+        case .lbs: return value
+        case .kg: return value / 0.453592
+        }
+    }
+
+    func format(lbs: Double, decimals: Int = 1) -> String {
+        let value = fromLbs(lbs)
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return "\(Int(value.rounded()))"
+        }
+        return String(format: "%.\(decimals)f", value)
+    }
+}
+
 struct Line: Shape {
     func path(in rect: CGRect) -> Path {
         Path { p in
@@ -77,6 +111,7 @@ struct ContentView: View {
     @Query(sort: \FoodEntry.date, order: .reverse) private var allEntries: [FoodEntry]
     @Query(sort: \GymEntry.date, order: .reverse) private var allGymEntries: [GymEntry]
     @Query(sort: \WeightEntry.date, order: .reverse) private var allWeightEntries: [WeightEntry]
+    @Query private var allWorkoutSets: [WorkoutSet]
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingAddSheet = false
@@ -87,6 +122,8 @@ struct ContentView: View {
     @State private var selectedDate: Date = Date()
     @State private var lastActiveDate: Date = Date()
     @AppStorage("stepsEnabled") private var stepsEnabled = false
+    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.lbs.rawValue
+    @State private var gymRemovalTarget: GymEntry?
 
     private var isToday: Bool {
         Calendar.current.isDateInToday(selectedDate)
@@ -337,6 +374,24 @@ struct ContentView: View {
                     .tint(Color(.label))
                     .presentationDetents([.height(220)])
             }
+            .alert(
+                "Remove gym log?",
+                isPresented: Binding(
+                    get: { gymRemovalTarget != nil },
+                    set: { if !$0 { gymRemovalTarget = nil } }
+                )
+            ) {
+                Button("Remove Workout & Gym Log", role: .destructive) {
+                    if let target = gymRemovalTarget {
+                        confirmRemoveGymWithWorkout(target)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    gymRemovalTarget = nil
+                }
+            } message: {
+                Text("This gym log has a workout attached. Removing it will also delete the workout and all its sets.")
+            }
         }
     }
 
@@ -358,10 +413,33 @@ struct ContentView: View {
     private func toggleGym() {
         let calendar = Calendar.current
         if let existing = allGymEntries.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDate) }) {
-            modelContext.delete(existing)
+            if hasAssociatedWorkout(existing) {
+                gymRemovalTarget = existing
+            } else {
+                modelContext.delete(existing)
+            }
         } else {
             modelContext.insert(GymEntry(date: selectedDate))
         }
+    }
+
+    private func hasAssociatedWorkout(_ entry: GymEntry) -> Bool {
+        if !entry.workoutID.isEmpty {
+            return allWorkoutSets.contains { $0.workoutID == entry.workoutID }
+        }
+        return allWorkoutSets.contains { $0.date == entry.date }
+    }
+
+    private func confirmRemoveGymWithWorkout(_ entry: GymEntry) {
+        let sets: [WorkoutSet]
+        if !entry.workoutID.isEmpty {
+            sets = allWorkoutSets.filter { $0.workoutID == entry.workoutID }
+        } else {
+            sets = allWorkoutSets.filter { $0.date == entry.date }
+        }
+        for set in sets { modelContext.delete(set) }
+        modelContext.delete(entry)
+        gymRemovalTarget = nil
     }
 
     // MARK: - Week Card
@@ -411,6 +489,117 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
+    // MARK: - Chip Buttons
+
+    @ViewBuilder
+    private var gymToggleButton: some View {
+        if didGymSelectedDay {
+            if #available(iOS 26.0, *) {
+                Button {
+                    toggleGym()
+                } label: {
+                    Label("Gym", systemImage: "checkmark")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.glassProminent)
+                .tint(AppColors.accent)
+            } else {
+                Button {
+                    toggleGym()
+                } label: {
+                    Label("Gym", systemImage: "checkmark")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppColors.accent)
+            }
+        } else {
+            if #available(iOS 26.0, *) {
+                Button {
+                    toggleGym()
+                } label: {
+                    Label("Log Gym", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.glass)
+            } else {
+                Button {
+                    toggleGym()
+                } label: {
+                    Label("Log Gym", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mealsCountButton: some View {
+        let label = "\(selectedEntries.count) \(selectedEntries.count == 1 ? "meal" : "meals")"
+        if #available(iOS 26.0, *) {
+            Button {
+                showingMealDetails = true
+            } label: {
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.glass)
+        } else {
+            Button {
+                showingMealDetails = true
+            } label: {
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var logFoodButton: some View {
+        if #available(iOS 26.0, *) {
+            Button {
+                showingAddSheet = true
+            } label: {
+                Label("Log Food", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.glass)
+        } else {
+            Button {
+                showingAddSheet = true
+            } label: {
+                Label("Log Food", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var logWeightButton: some View {
+        let label = selectedDateWeightEntry != nil ? "Edit Weight" : "Log Weight"
+        let icon = selectedDateWeightEntry != nil ? "pencil" : "plus"
+        if #available(iOS 26.0, *) {
+            Button {
+                showingWeightLog = true
+            } label: {
+                Label(label, systemImage: icon)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.glass)
+        } else {
+            Button {
+                showingWeightLog = true
+            } label: {
+                Label(label, systemImage: icon)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
     // MARK: - Activity Card
 
     private var activityCard: some View {
@@ -423,18 +612,7 @@ struct ContentView: View {
                     Text("\(currentStreak)-day streak!")
                         .font(.system(size: 11, weight: .regular))
                 }
-                Button {
-                    toggleGym()
-                } label: {
-                    Text(didGymSelectedDay ? "Gym Logged" : "Log Gym")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(didGymSelectedDay ? Color.primary.opacity(0.1) : Color.clear, in: Capsule())
-                        .overlay(Capsule().stroke(.primary, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
+                gymToggleButton
             }
 
             HStack(spacing: 28) {
@@ -526,56 +704,41 @@ struct ContentView: View {
                 Text("Food")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                if !selectedEntries.isEmpty {
-                    Button {
-                        showingMealDetails = true
-                    } label: {
-                        Text("\(selectedEntries.count) meals")
-                            .font(.caption2.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .overlay(Capsule().stroke(.primary, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.primary)
-                }
-                Button {
-                    showingAddSheet = true
-                } label: {
-                    Text("Log")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .overlay(Capsule().stroke(.primary, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
+                logFoodButton
             }
 
             HStack(spacing: 28) {
                 VStack(spacing: 4) {
-                    ZStack {
-                        Circle()
-                            .stroke(.quaternary, lineWidth: 14)
-                        Circle()
-                            .trim(from: 0, to: calorieProgress)
-                            .stroke(calorieColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                            .animation(.easeInOut, value: calorieProgress)
-
-                        VStack(spacing: 2) {
-                            Image(systemName: "fork.knife")
-                                .font(.system(size: 18))
-                                .foregroundStyle(calorieColor)
-                            Text("\(totalCalories)")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .contentTransition(.numericText())
-                            Text("kcal")
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
+                    Button {
+                        if !selectedEntries.isEmpty {
+                            showingMealDetails = true
                         }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .stroke(.quaternary, lineWidth: 14)
+                            Circle()
+                                .trim(from: 0, to: calorieProgress)
+                                .stroke(calorieColor, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .animation(.easeInOut, value: calorieProgress)
+
+                            VStack(spacing: 2) {
+                                Image(systemName: "fork.knife")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(calorieColor)
+                                Text("\(totalCalories)")
+                                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    .contentTransition(.numericText())
+                                Text("kcal")
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(width: 148, height: 148)
                     }
-                    .frame(width: 148, height: 148)
+                    .buttonStyle(.plain)
+                    .disabled(selectedEntries.isEmpty)
                 }
 
                 VStack(spacing: 8) {
@@ -621,25 +784,15 @@ struct ContentView: View {
                 Text("Weight")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Button {
-                    showingWeightLog = true
-                } label: {
-                    Text(selectedDateWeightEntry != nil ? "Edit" : "Log")
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .overlay(Capsule().stroke(.primary, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
+                logWeightButton
             }
 
             if let entry = selectedDateWeightEntry {
                 HStack {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(String(format: "%.1f", entry.weight))
+                        Text(String(format: "%.1f", WeightUnit.current.fromLbs(entry.weight)))
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                        Text("lbs")
+                        Text(WeightUnit.current.label)
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
@@ -679,8 +832,12 @@ struct LogWeightSheet: View {
     @State private var weightText = ""
     @State private var bodyFatText = ""
     @FocusState private var focusedField: WeightField?
+    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.lbs.rawValue
 
     enum WeightField { case weight, bodyFat }
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRaw) ?? .lbs }
+    private var weightLimit: Double { weightUnit == .lbs ? 999 : 453 }
 
     var body: some View {
         NavigationStack {
@@ -689,7 +846,7 @@ struct LogWeightSheet: View {
                     VStack(spacing: 10) {
                         Text("\u{2696}\u{fe0f}")
                             .font(.system(size: 28))
-                        Text("Weight (lbs)")
+                        Text("Weight (\(weightUnit.label))")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
                         TextField("0", text: $weightText)
@@ -698,8 +855,8 @@ struct LogWeightSheet: View {
                             .font(.title2.weight(.bold))
                             .focused($focusedField, equals: .weight)
                             .onChange(of: weightText) {
-                                if let val = Double(weightText), val > 999 {
-                                    weightText = "999"
+                                if let val = Double(weightText), val > weightLimit {
+                                    weightText = "\(Int(weightLimit))"
                                 }
                             }
                             .overlay(alignment: .bottom) {
@@ -764,7 +921,7 @@ struct LogWeightSheet: View {
             }
             .onAppear {
                 if let e = existingEntry {
-                    weightText = String(format: "%.1f", e.weight)
+                    weightText = String(format: "%.1f", weightUnit.fromLbs(e.weight))
                     if e.bodyFat > 0 {
                         bodyFatText = String(format: "%.1f", e.bodyFat)
                     }
@@ -777,14 +934,15 @@ struct LogWeightSheet: View {
     }
 
     private func save() {
-        guard let weight = Double(weightText), weight <= 999 else { return }
+        guard let input = Double(weightText), input <= weightLimit else { return }
+        let weightLbs = weightUnit.toLbs(input)
         let bodyFat = min(Double(bodyFatText) ?? 0, 99.9)
 
         if let existing = existingEntry {
-            existing.weight = weight
+            existing.weight = weightLbs
             existing.bodyFat = bodyFat
         } else {
-            modelContext.insert(WeightEntry(weight: weight, bodyFat: bodyFat, date: date))
+            modelContext.insert(WeightEntry(weight: weightLbs, bodyFat: bodyFat, date: date))
         }
         dismiss()
     }
@@ -918,6 +1076,7 @@ struct GoalsSettingsSheet: View {
     @State private var requireCalories = true
     @State private var requireProtein = true
     @State private var requireGym = false
+    @AppStorage("weightUnit") private var weightUnit: String = WeightUnit.lbs.rawValue
 
     var body: some View {
         NavigationStack {
@@ -965,6 +1124,17 @@ struct GoalsSettingsSheet: View {
                     }
                 } footer: {
                     Text("\u{2139}\u{fe0f} Suggested defaults (7,000 steps · 2,000 kcal · 100g protein · 3 gym days) are based on guidance from the CDC, USDA, NIH, and WHO. See Health Information Sources below for details.")
+                }
+
+                Section {
+                    Picker("Weight Unit", selection: $weightUnit) {
+                        Text("Pounds (lbs)").tag(WeightUnit.lbs.rawValue)
+                        Text("Kilograms (kg)").tag(WeightUnit.kg.rawValue)
+                    }
+                } header: {
+                    Text("Units")
+                } footer: {
+                    Text("Affects weight inputs and displays throughout the app. Existing data is converted automatically.")
                 }
 
                 Section {

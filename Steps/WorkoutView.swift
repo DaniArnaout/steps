@@ -201,7 +201,7 @@ struct WorkoutView: View {
             let exerciseSets = grouped[name]!.sorted { $0.setNumber < $1.setNumber }
             let journeySets = exerciseSets.enumerated().map { idx, ws in
                 JourneySetInfo(
-                    weight: formatWeight(ws.weight),
+                    weight: WeightUnit.current.format(lbs: ws.weight),
                     reps: "\(ws.reps)",
                     setNumber: idx + 1,
                     completionOrder: idx
@@ -689,6 +689,10 @@ struct CreateCustomWorkoutSheet: View {
     @State private var draftExercises: [DraftExercise] = []
     @State private var showingSaveConfirm = false
     @FocusState private var focusedField: Bool
+    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.lbs.rawValue
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRaw) ?? .lbs }
+    private var weightLimit: Double { weightUnit == .lbs ? 999 : 453 }
 
     private let iconOptions = [
         "figure.strengthtraining.traditional",
@@ -978,8 +982,8 @@ struct CreateCustomWorkoutSheet: View {
                             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.separator).opacity(0.2), lineWidth: 1))
                             .onChange(of: draftExercises[index].sets[setIdx].weight) {
-                                if let val = Double(draftExercises[index].sets[setIdx].weight), val > 999 {
-                                    draftExercises[index].sets[setIdx].weight = "999"
+                                if let val = Double(draftExercises[index].sets[setIdx].weight), val > weightLimit {
+                                    draftExercises[index].sets[setIdx].weight = "\(Int(weightLimit))"
                                 }
                             }
 
@@ -1075,12 +1079,12 @@ struct CreateCustomWorkoutSheet: View {
         let exercises = draftExercises.compactMap { draft -> ExerciseInfo? in
             let exerciseName = draft.name.trimmingCharacters(in: .whitespaces)
             guard !exerciseName.isEmpty else { return nil }
-            let firstWeight = Double(draft.sets.first?.weight ?? "") ?? 50
+            let firstWeightInput = Double(draft.sets.first?.weight ?? "") ?? 50
             let firstReps = Int(draft.sets.first?.reps ?? "") ?? defaultReps
             return ExerciseInfo(
                 name: exerciseName,
                 categoryName: trimmedName,
-                defaultWeight: firstWeight,
+                defaultWeight: weightUnit.toLbs(firstWeightInput),
                 defaultReps: firstReps
             )
         }
@@ -1148,6 +1152,10 @@ struct AddExerciseSheet: View {
     @State private var weightText = ""
     @State private var repsText = ""
     @FocusState private var focused: Bool
+    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.lbs.rawValue
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRaw) ?? .lbs }
+    private var weightLimit: Double { weightUnit == .lbs ? 999 : 453 }
 
     var body: some View {
         NavigationStack {
@@ -1157,10 +1165,10 @@ struct AddExerciseSheet: View {
                     .onChange(of: name) {
                         if name.count > 50 { name = String(name.prefix(50)) }
                     }
-                TextField("Starting weight (lbs)", text: $weightText)
+                TextField("Starting weight (\(weightUnit.label))", text: $weightText)
                     .keyboardType(.decimalPad)
                     .onChange(of: weightText) {
-                        if let val = Double(weightText), val > 999 { weightText = "999" }
+                        if let val = Double(weightText), val > weightLimit { weightText = "\(Int(weightLimit))" }
                     }
                 TextField("Starting reps", text: $repsText)
                     .keyboardType(.numberPad)
@@ -1176,10 +1184,11 @@ struct AddExerciseSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
+                        let inputWeight = Double(weightText) ?? 50
                         let exercise = ExerciseInfo(
                             name: name.trimmingCharacters(in: .whitespaces),
                             categoryName: categoryName,
-                            defaultWeight: Double(weightText) ?? 50,
+                            defaultWeight: weightUnit.toLbs(inputWeight),
                             defaultReps: Int(repsText) ?? 10
                         )
                         onAdd(exercise)
@@ -1434,7 +1443,7 @@ struct WorkoutTypeDetailView: View {
                             .padding(.vertical, 3)
                             .background(Color(.systemGray5), in: Capsule())
                     }
-                    Text("\(Int(exercise.defaultWeight)) lbs · \(exercise.defaultReps) reps")
+                    Text("\(WeightUnit.current.format(lbs: exercise.defaultWeight)) \(WeightUnit.current.label) · \(exercise.defaultReps) reps")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1498,6 +1507,10 @@ struct ActiveWorkoutView: View {
     @State private var restRecords: [Int: Int] = [:]
     @State private var restStartedAfterOrder: Int = -1
     @State private var restStartTime: Date?
+    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.lbs.rawValue
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRaw) ?? .lbs }
+    private var weightLimit: Double { weightUnit == .lbs ? 999 : 453 }
 
     private var isEditMode: Bool { editDate != nil }
 
@@ -1998,7 +2011,7 @@ struct ActiveWorkoutView: View {
                 if sessionSets[exercise] != nil && index < sessionSets[exercise]!.count {
                     var clamped = newValue
                     if keyPath == \.weight {
-                        if let val = Double(newValue), val > 999 { clamped = "999" }
+                        if let val = Double(newValue), val > weightLimit { clamped = "\(Int(weightLimit))" }
                     } else if keyPath == \.reps {
                         if let val = Int(newValue), val > 999 { clamped = "999" }
                     }
@@ -2006,6 +2019,11 @@ struct ActiveWorkoutView: View {
                 }
             }
         )
+    }
+
+    private func displayWeight(fromLbs lbs: Double) -> String {
+        let val = weightUnit.fromLbs(lbs)
+        return val.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(val.rounded()))" : String(format: "%.1f", val)
     }
 
     private var hasAnyInput: Bool {
@@ -2024,7 +2042,7 @@ struct ActiveWorkoutView: View {
             for exercise in activeExercises {
                 if let sets = grouped[exercise.name]?.sorted(by: { $0.setNumber < $1.setNumber }), !sets.isEmpty {
                     sessionSets[exercise.name] = sets.map { set in
-                        SetEntry(weight: formatWeight(set.weight), reps: "\(set.reps)", completed: true)
+                        SetEntry(weight: displayWeight(fromLbs: set.weight), reps: "\(set.reps)", completed: true)
                     }
                 } else {
                     sessionSets[exercise.name] = []
@@ -2034,7 +2052,7 @@ struct ActiveWorkoutView: View {
             for exercise in activeExercises {
                 let lastSets = previousSets(for: exercise.name)
                 if lastSets.isEmpty {
-                    let w = formatWeight(exercise.defaultWeight)
+                    let w = displayWeight(fromLbs: exercise.defaultWeight)
                     let r = "\(exercise.defaultReps)"
                     sessionSets[exercise.name] = [
                         SetEntry(weight: w, reps: r),
@@ -2043,7 +2061,7 @@ struct ActiveWorkoutView: View {
                     ]
                 } else {
                     sessionSets[exercise.name] = lastSets.map { set in
-                        SetEntry(weight: formatWeight(set.weight), reps: "\(set.reps)")
+                        SetEntry(weight: displayWeight(fromLbs: set.weight), reps: "\(set.reps)")
                     }
                 }
             }
@@ -2289,8 +2307,9 @@ struct ActiveWorkoutView: View {
             let sets = sessionSets[exercise.name] ?? []
             for (index, entry) in sets.enumerated() {
                 guard entry.completed,
-                      let weight = Double(entry.weight), let reps = Int(entry.reps),
-                      weight > 0, reps > 0 else { continue }
+                      let inputWeight = Double(entry.weight), let reps = Int(entry.reps),
+                      inputWeight > 0, reps > 0 else { continue }
+                let weight = weightUnit.toLbs(inputWeight)
                 let workoutSet = WorkoutSet(
                     exerciseName: exercise.name,
                     weight: weight,
@@ -2331,8 +2350,9 @@ struct ActiveWorkoutView: View {
             let sets = sessionSets[exercise.name] ?? []
             for (index, entry) in sets.enumerated() {
                 guard entry.completed,
-                      let weight = Double(entry.weight), let reps = Int(entry.reps),
-                      weight > 0, reps > 0 else { continue }
+                      let inputWeight = Double(entry.weight), let reps = Int(entry.reps),
+                      inputWeight > 0, reps > 0 else { continue }
+                let weight = weightUnit.toLbs(inputWeight)
                 let workoutSet = WorkoutSet(
                     exerciseName: exercise.name,
                     weight: weight,
@@ -2463,7 +2483,7 @@ struct WorkoutJourneyView: View {
                                             .foregroundStyle(.secondary)
                                             .frame(width: 48, alignment: .leading)
 
-                                        Text("\(set.weight) lbs")
+                                        Text("\(set.weight) \(WeightUnit.current.label)")
                                             .font(.body.weight(.semibold).monospacedDigit())
 
                                         Text("×")

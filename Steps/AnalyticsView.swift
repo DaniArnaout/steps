@@ -44,6 +44,9 @@ struct AnalyticsView: View {
     @State private var selectedWeightDate: Date?
     @State private var selectedBodyFatDate: Date?
     @State private var showingContact = false
+    @AppStorage("weightUnit") private var weightUnitRaw: String = WeightUnit.lbs.rawValue
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRaw) ?? .lbs }
 
     private var dateRange: [Date] {
         let calendar = Calendar.current
@@ -104,13 +107,16 @@ struct AnalyticsView: View {
     }
 
     private var weightYMin: Double {
-        let weights = weightInRange.map(\.weight)
-        return (weights.min() ?? 0) - 5
+        let weights = weightInRange.map { weightUnit.fromLbs($0.weight) }
+        let padding = weightUnit == .lbs ? 5.0 : 2.5
+        return (weights.min() ?? 0) - padding
     }
 
     private var weightYMax: Double {
-        let weights = weightInRange.map(\.weight)
-        return (weights.max() ?? 200) + 5
+        let weights = weightInRange.map { weightUnit.fromLbs($0.weight) }
+        let fallback: Double = weightUnit == .lbs ? 200 : 90
+        let padding = weightUnit == .lbs ? 5.0 : 2.5
+        return (weights.max() ?? fallback) + padding
     }
 
     private var bodyFatYMin: Double {
@@ -219,7 +225,7 @@ struct AnalyticsView: View {
     private var selectedWeightValue: String? {
         guard let selected = selectedWeightDate,
               let entry = weightInRange.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selected) }) else { return nil }
-        return String(format: "%.1f lbs", entry.weight)
+        return String(format: "%.1f %@", weightUnit.fromLbs(entry.weight), weightUnit.label)
     }
 
     private var selectedBodyFatValue: String? {
@@ -416,12 +422,12 @@ struct AnalyticsView: View {
                 ForEach(weightInRange) { entry in
                     LineMark(
                         x: .value("Date", entry.date, unit: .day),
-                        y: .value("Weight", entry.weight)
+                        y: .value("Weight", weightUnit.fromLbs(entry.weight))
                     )
                     .foregroundStyle(Color(.label))
                     PointMark(
                         x: .value("Date", entry.date, unit: .day),
-                        y: .value("Weight", entry.weight)
+                        y: .value("Weight", weightUnit.fromLbs(entry.weight))
                     )
                     .foregroundStyle(Color(.label))
                 }
